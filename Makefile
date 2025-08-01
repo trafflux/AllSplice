@@ -1,0 +1,23 @@
+.PHONY: lint format type test test-cov run hooks
+
+lint:
+	ruff .
+
+format:
+	black .
+
+type:
+	mypy src
+
+test:
+	pytest
+
+test-cov:
+	pytest --cov=src --cov-report=term-missing
+
+run:
+	uvicorn ai_gateway.api.app:get_app --reload --host 0.0.0.0 --port 8000
+
+hooks:
+	pre-commit install
+	pre-commit run --all-files

@@ -4,3 +4,17 @@ pydantic
 cerebras-cloud-sdk
 ollama
 python-dotenv
+uvicorn[standard]
+pydantic-settings
+httpx
+anyio
+typing-extensions
+pytest
+pytest-asyncio
+pytest-cov
+ruff
+mypy
+black
+pre-commit
+types-requests
+uvicorn[standard]

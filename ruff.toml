@@ -1,0 +1,9 @@
+target-version = "py312"
+line-length = 100
+[lint]
+select = ["E", "F", "W", "N", "I", "C90"]
+ignore = []
+[lint.isort]
+known-first-party = ["ai_gateway"]
+combine-as-imports = true
+force-single-line = false
