@@ -14,8 +14,9 @@ repos:
     hooks:
       - id: mypy
         additional_dependencies: []
-        args: ["--config-file", "mypy.ini", "src"]
+        args: ["--config-file", "mypy.ini"]
         language: system
+        files: ^src/|^tests/
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
     hooks:

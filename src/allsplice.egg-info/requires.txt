@@ -1,11 +1,11 @@
 fastapi
 uvicorn
+uvicorn[standard]
 pydantic
+pydantic-settings
 cerebras-cloud-sdk
 ollama
 python-dotenv
-uvicorn[standard]
-pydantic-settings
 httpx
 anyio
 typing-extensions
@@ -17,4 +17,3 @@ mypy
 black
 pre-commit
 types-requests
-uvicorn[standard]

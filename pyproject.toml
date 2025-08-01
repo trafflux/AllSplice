@@ -1,0 +1,37 @@
+[project]
+name = "allsplice"
+version = "0.1.0"
+description = "Universal AI Gateway: OpenAI-compatible API server to route chat completions to multiple providers."
+authors = [
+    { name = "trafflux" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "uvicorn[standard]",
+    "pydantic",
+    "pydantic-settings",
+    "cerebras-cloud-sdk",
+    "ollama",
+    "python-dotenv",
+    "httpx",
+    "anyio",
+    "typing-extensions",
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "ruff",
+    "mypy",
+    "black",
+    "pre-commit",
+    "types-requests"
+]
+
+[tool.uv]
+# Optional: you can add uv-specific settings here
+
+[tool.pytest.ini_options]
+addopts = "-q -ra -W error::DeprecationWarning --cov=src --cov-report=term-missing"
+asyncio_mode = "auto"
+testpaths = ["tests"]

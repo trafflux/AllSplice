@@ -5,7 +5,7 @@ Authoritative engineering standards for the Universal AI Gateway v1.0 and future
 ## 1. Language, Runtime, and Style
 
 - Python: 3.12+ required.
-- Use uv pip for dependency management.
+- Use uv and pyproject.toml for dependency management.
 - Typing: strict type hints for all public functions, methods, classes, and module variables. Codebase must be mypy-clean under strict settings.
 - Linting/Formatting:
   - Ruff for linting (include rules for imports, complexity, naming).
@@ -188,7 +188,7 @@ docs/             # examples and additional docs (optional)
 
 - Manage dependencies in `pyproject.toml`; pin major versions.
 - Minimize dependencies; periodically update with CI verification.
-- Use a lock strategy consistent with selected toolchain (uv/poetry/pip-tools optional).
+- Use a lock strategy consistent with uv.
 
 ## 15. Deployment and Operations
 
