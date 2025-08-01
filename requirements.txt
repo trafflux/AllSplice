@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+pydantic
+cerebras-cloud-sdk
+ollama
+python-dotenv

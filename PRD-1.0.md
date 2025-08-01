@@ -1,0 +1,36 @@
+Product Requirements Document: Universal AI GatewayVersion: 1.0Date: August 1, 20251. IntroductionThis document outlines the product requirements for a Universal AI Gateway, a Python 3.12 application that acts as an OpenAI-compatible API server. The primary goal of this project is to create a unified entry point for various AI models and services, leveraging the widespread adoption of the OpenAI API standard. This will allow any AI agent or application configured to use OpenAI's API to seamlessly connect to and utilize different backend AI providers without modification.The gateway will feature a URI-based routing system to direct incoming requests to specific "modules." Each module will be responsible for translating the standard OpenAI API request into the format required by the target AI provider (e.g., Cerebras, Ollama) and handling the response.Furthermore, the gateway will be designed with extensibility in mind, including a "Custom Processing" module to intercept and modify requests. This opens the door for advanced features like prompt engineering, task decomposition, and the dynamic creation of sub-agents.2. Goals and ObjectivesPrimary Goal: To create a robust, production-ready, and extensible OpenAI-compatible API server.Interoperability: Enable any OpenAI-compatible client to connect to various AI providers.Modularity: Develop a modular architecture that allows for the easy addition of new AI providers.Extensibility: Provide a mechanism for intercepting and processing requests to enable advanced AI-native workflows.Quality: Adhere to software development best practices, including Test-Driven Development (TDD), strong typing, and comprehensive documentation.3. Product ScopeIn-Scope for Version 1.0An API server built with Python 3.12 and FastAPI.Full compatibility with the OpenAI Chat Completions API (/v1/chat/completions).URI-based routing to different backend modules.Three initial modules:Cerebras Module: Routes requests to the Cerebras Cloud API.Ollama Module: Routes requests to a local or remote Ollama instance.Custom Processing Module: Makes the raw OpenAI request available as structured data for potential manipulation.Basic authentication using API keys (Bearer tokens).A comprehensive test suite using pytest, developed following TDD principles.Strongly typed code using Python's type hints.Out-of-Scope for Version 1.0Support for OpenAI endpoints other than Chat Completions (e.g., Embeddings, Image Generation, Audio).A graphical user interface (GUI) for configuration or monitoring.Advanced features like automated task chunking and sub-agent creation (the Custom Processing module will provide the foundation for these).User account management and complex permission systems.Support for streaming responses in the initial version.4. Functional Requirements4.1. OpenAI-Compatible API ServerThe server MUST expose an endpoint that mirrors the OpenAI Chat Completions API: POST /v1/chat/completions.The server MUST accept and parse JSON payloads that conform to the OpenAI Chat Completions API specification.The server MUST handle standard HTTP headers, including Authorization for API key authentication.The server MUST return responses in the OpenAI API format, including id, object, created, model, choices, and usage fields.4.2. URI-Based RoutingThe server MUST support dynamic routing based on the request URI.A standard OpenAI request will be handled by the /v1/ path prefix. For this initial version, this will route to the Custom Processing module.Requests to /cerebras/v1/chat/completions MUST be routed to the Cerebras module.Requests to /ollama/v1/chat/completions MUST be routed to the Ollama module.4.3. Module 1: Cerebras IntegrationThis module will be activated by requests to /cerebras/v1/....It MUST use the cerebras.cloud.sdk library to interact with the Cerebras Cloud API.It MUST map the incoming OpenAI Chat Completions request payload to the parameters required by the Cerebras.chat.completions.create() method.The Cerebras API endpoint URL and API key will be configured via environment variables.It MUST transform the response from the Cerebras API back into the standard OpenAI Chat Completions response format.4.4. Module 2: Ollama IntegrationThis module will be activated by requests to /ollama/v1/....It MUST use the ollama library to communicate with an Ollama instance.It MUST map the incoming OpenAI request payload to the parameters for ollama.chat().The Ollama host URL will be configured via an environment variable.It MUST transform the response from Ollama into the standard OpenAI Chat Completions response format.4.5. Module 3: Custom ProcessingThis module will be the default handler for requests to /v1/....For version 1.0, this module will simply receive the parsed OpenAI request and make it available as structured data (e.g., a Pydantic model).This serves as a placeholder and foundation for future development of prompt engineering and pre-processing features. For now, it can return a mock response or log the structured data.4.6. AuthenticationThe server MUST secure its endpoints.It MUST expect an API key to be provided in the Authorization header as a Bearer token (e.g., Authorization: Bearer <your-api-key>).A list of valid API keys will be managed through an environment variable or a simple configuration file.5. Non-Functional RequirementsPerformance: The server should be asynchronous and capable of handling concurrent requests efficiently. FastAPI is chosen for its high performance.Scalability: The application should be stateless to allow for horizontal scaling behind a load balancer.Security:Use of environment variables for sensitive information (API keys, endpoint URLs).Implementation of basic security headers.Testability: The codebase MUST be developed using Test-Driven Development (TDD) with pytest. Unit tests should cover all business logic, and integration tests should cover the API endpoints.Extensibility: The modular design should make it easy to add new provider modules with minimal changes to the core application.Code Quality: The entire codebase MUST be strongly typed using Python 3.12's type annotation features.6. Technical StackProgramming Language: Python 3.12+Web Framework: FastAPIServer: UvicornData Validation: Pydantic (comes with FastAPI)Testing Framework: pytestKey Dependencies:fastapiuvicornpydanticcerebras-cloud-sdkollamapython-dotenv (for managing environment variables)7. API Specification (High-Level)Request (Example to /cerebras/v1/chat/completions){
+  "model": "BTLM-3B-8K-chat",
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a helpful assistant."
+    },
+    {
+      "role": "user",
+      "content": "Hello! What is the capital of France?"
+    }
+  ],
+  "temperature": 0.7,
+  "max_tokens": 100
+}
+Response (Standard OpenAI Format){
+  "id": "chatcmpl-xxxxxxxxxxxxxxxxxxxxxx",
+  "object": "chat.completion",
+  "created": 1677652288,
+  "model": "BTLM-3B-8K-chat",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "The capital of France is Paris."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 20,
+    "completion_tokens": 7,
+    "total_tokens": 27
+  }
+}
