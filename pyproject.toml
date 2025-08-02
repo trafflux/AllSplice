@@ -18,6 +18,10 @@ dependencies = [
     "httpx",
     "anyio",
     "typing-extensions",
+]
+
+[project.optional-dependencies]
+dev = [
     "pytest",
     "pytest-asyncio",
     "pytest-cov",

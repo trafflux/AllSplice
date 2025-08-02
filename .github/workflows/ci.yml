@@ -9,10 +9,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
       # Install uv
       - name: Install uv
         run: |
           pipx install uv
+
       - name: Cache uv
         uses: actions/cache@v4
         with:
@@ -20,12 +27,16 @@ jobs:
           key: ${{ runner.os }}-uv-${{ hashFiles('**/pyproject.toml') }}
           restore-keys: |
             ${{ runner.os }}-uv-
-      - name: Install deps
+
+      - name: Install dependencies
         run: |
-          uv pip install --system -r pyproject.toml
+          uv sync --extra dev
+
       - name: Lint (ruff)
-        run: uv pip run ruff .
+        run: uv run ruff check .
+
       - name: Type check (mypy)
-        run: uv pip run mypy src
+        run: uv run mypy src
+
       - name: Tests
-        run: uv pip run pytest --cov=src --cov-report=term-missing --cov-fail-under=85
+        run: uv run pytest --cov=src --cov-report=term-missing --cov-fail-under=85
