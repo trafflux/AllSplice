@@ -11,7 +11,7 @@ async def test_v1_chat_completions_unauthorized(monkeypatch: pytest.MonkeyPatch)
     # Ensure there are allowed keys but we don't send any header
     def fake_settings() -> Settings:
         # Enable DEVELOPMENT_MODE to relax config validation in tests
-        return Settings(ALLOWED_API_KEYS=["k1"], DEVELOPMENT_MODE=True)
+        return Settings(ALLOWED_API_KEYS=["k1"], DEVELOPMENT_MODE=True, REQUIRE_AUTH=True)
 
     monkeypatch.setattr("ai_gateway.config.config.get_settings", fake_settings)
 

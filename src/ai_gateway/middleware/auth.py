@@ -79,6 +79,7 @@ async def auth_bearer(
     # Obtain settings via the imported symbol so pytest monkeypatch on
     # "ai_gateway.config.config.get_settings" takes effect here.
     settings = config_module.get_settings()
+
     # If we're explicitly in development mode AND auth is disabled by settings,
     # bypass authentication entirely (no header required).
     if getattr(settings, "DEVELOPMENT_MODE", False) and not getattr(settings, "REQUIRE_AUTH", True):
@@ -101,11 +102,9 @@ async def auth_bearer(
         if isinstance(ak_raw, str) and ak_raw.strip():
             allowed = _parse_allowed_keys(ak_raw)
 
-    # In development mode (e.g., under pytest fallback), allow any token if no keys are configured.
-    # This preserves the requirement for a well-formed Bearer header while avoiding brittleness
-    # due to settings cache/monkeypatch timing in tests.
+    # In development mode with REQUIRE_AUTH=True but no keys configured,
+    # allow any token (still requiring proper Authorization header format)
     if getattr(settings, "DEVELOPMENT_MODE", False) and not allowed:
-        # Still require a properly formatted Authorization header
         token = _parse_bearer_token(authorization)
         return token
 

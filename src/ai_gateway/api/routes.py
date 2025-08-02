@@ -24,6 +24,42 @@ from ai_gateway.schemas.openai_chat import (
     Usage,
 )
 
+# Module-level provider instances for dependency injection
+_default_custom_provider: CustomProcessingProvider | None = None
+_default_cerebras_provider: CerebrasProvider | None = None
+_default_ollama_provider: OllamaProvider | None = None
+
+
+def get_custom_provider() -> CustomProcessingProvider:
+    """Factory dependency for CustomProcessingProvider."""
+    global _default_custom_provider
+    if _default_custom_provider is None:
+        _default_custom_provider = CustomProcessingProvider()
+    return _default_custom_provider
+
+
+def get_cerebras_provider() -> CerebrasProvider:
+    """Factory dependency for CerebrasProvider."""
+    global _default_cerebras_provider
+    if _default_cerebras_provider is None:
+        _default_cerebras_provider = CerebrasProvider()
+    return _default_cerebras_provider
+
+
+def get_ollama_provider() -> OllamaProvider:
+    """Factory dependency for OllamaProvider."""
+    global _default_ollama_provider
+    if _default_ollama_provider is None:
+        _default_ollama_provider = OllamaProvider()
+    return _default_ollama_provider
+
+
+# Module-level dependency instances
+_custom_provider_dep = Depends(get_custom_provider)
+_cerebras_provider_dep = Depends(get_cerebras_provider)
+_ollama_provider_dep = Depends(get_ollama_provider)
+
+
 health_router = APIRouter()
 v1_router = APIRouter(prefix=V1_BASE)
 cerebras_router = APIRouter(prefix=CEREBRAS_BASE)
@@ -57,18 +93,20 @@ def _mock_chat_response(model: str) -> ChatCompletionResponse:
 
 @v1_router.post("/chat/completions")
 async def chat_completions_v1(
-    req: ChatCompletionRequest, token: str = Depends(auth_bearer)
+    req: ChatCompletionRequest,
+    token: str = Depends(auth_bearer),
+    provider: CustomProcessingProvider = _custom_provider_dep,
 ) -> ChatCompletionResponse:
     # Use the CustomProcessingProvider to generate a response
-    provider = CustomProcessingProvider()
     return await provider.chat_completions(req)
 
 
 @cerebras_router.post("/chat/completions")
 async def chat_completions_cerebras(
-    req: ChatCompletionRequest, token: str = Depends(auth_bearer)
+    req: ChatCompletionRequest,
+    token: str = Depends(auth_bearer),
+    provider: CerebrasProvider = _cerebras_provider_dep,
 ) -> ChatCompletionResponse:
-    provider = CerebrasProvider()
     try:
         return await provider.chat_completions(req)
     except ProviderError as exc:
@@ -78,9 +116,10 @@ async def chat_completions_cerebras(
 
 @ollama_router.post("/chat/completions")
 async def chat_completions_ollama(
-    req: ChatCompletionRequest, token: str = Depends(auth_bearer)
+    req: ChatCompletionRequest,
+    token: str = Depends(auth_bearer),
+    provider: OllamaProvider = _ollama_provider_dep,
 ) -> ChatCompletionResponse:
-    provider = OllamaProvider()
     try:
         return await provider.chat_completions(req)
     except ProviderError as exc:

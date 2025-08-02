@@ -19,13 +19,12 @@ from ai_gateway.schemas.openai_chat import (
 )
 
 # Notes:
-# The current routes instantiate providers directly inside route handlers and do not expose
-# dependency callables for providers. We can still validate DI override ability by monkeypatching
-# the provider classes that the routes import (ai_gateway.providers.custom.CustomProcessingProvider,
-# ai_gateway.providers.cerebras.CerebrasProvider, ai_gateway.providers.ollama.OllamaProvider).
+# The routes now use dependency injection with provider factory functions. We test DI override
+# ability using FastAPI's dependency_overrides mechanism to replace the provider factories
+# with our fake providers (FakeSuccessProvider and FakeErrorProvider).
 #
-# This preserves the app's composition while allowing us to inject fakes in tests, which is
-# effectively testing the "DI seam" via import-time binding used by the routes module.
+# This approach is more idiomatic FastAPI and allows us to test the dependency injection
+# system directly while maintaining the app's composition.
 
 
 class ChatProvider(Protocol):
@@ -69,12 +68,11 @@ class FakeErrorProvider:
 
 @pytest.fixture()
 def app() -> FastAPI:
-    # Enable dev-mode bypass to avoid needing Authorization headers.
-    # tests/conftest.py already sets defaults; enforce here for clarity.
+    # Enable dev-mode but require auth to test dependency injection
     import os
 
     os.environ["DEVELOPMENT_MODE"] = "true"
-    os.environ["REQUIRE_AUTH"] = "false"
+    os.environ["REQUIRE_AUTH"] = "true"
     return get_app()
 
 
@@ -87,22 +85,24 @@ async def client(app: FastAPI) -> AsyncGenerator[AsyncClient, None]:
 
 
 @pytest.mark.asyncio
-async def test_v1_provider_override_success(
-    monkeypatch: pytest.MonkeyPatch, client: AsyncClient
-) -> None:
-    # Patch the provider class used by the /v1 route to our fake success provider
+async def test_v1_provider_override_success(client: AsyncClient, app: FastAPI) -> None:
+    # Override the provider factory to return our fake success provider
+    from ai_gateway.api.routes import get_custom_provider
 
-    # Patch at the symbol actually used by the route module so our fake is constructed
-    import ai_gateway.api.routes as routes_mod
+    def fake_provider_factory() -> FakeSuccessProvider:
+        return FakeSuccessProvider("fake-v1")
 
-    monkeypatch.setattr(
-        routes_mod, "CustomProcessingProvider", lambda: FakeSuccessProvider("fake-v1")
-    )
+    app.dependency_overrides[get_custom_provider] = fake_provider_factory
+
     payload = ChatCompletionRequest(
         model="ignored", messages=[ChatMessage(role="user", content="hi")]
     )
 
-    resp = await client.post(f"{V1_BASE}/chat/completions", json=payload.model_dump())
+    resp = await client.post(
+        f"{V1_BASE}/chat/completions",
+        headers={"Authorization": "Bearer test-key"},
+        json=payload.model_dump(),
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert data["model"] == "fake-v1"
@@ -112,19 +112,24 @@ async def test_v1_provider_override_success(
 
 
 @pytest.mark.asyncio
-async def test_cerebras_provider_override_success(
-    monkeypatch: pytest.MonkeyPatch, client: AsyncClient
-) -> None:
-    import ai_gateway.api.routes as routes_mod
+async def test_cerebras_provider_override_success(client: AsyncClient, app: FastAPI) -> None:
+    # Override the provider factory to return our fake success provider
+    from ai_gateway.api.routes import get_cerebras_provider
 
-    monkeypatch.setattr(
-        routes_mod, "CerebrasProvider", lambda: FakeSuccessProvider("fake-cerebras")
-    )
+    def fake_provider_factory() -> FakeSuccessProvider:
+        return FakeSuccessProvider("fake-cerebras")
+
+    app.dependency_overrides[get_cerebras_provider] = fake_provider_factory
+
     payload = ChatCompletionRequest(
         model="ignored", messages=[ChatMessage(role="user", content="hi")]
     )
 
-    resp = await client.post(f"{CEREBRAS_BASE}/chat/completions", json=payload.model_dump())
+    resp = await client.post(
+        f"{CEREBRAS_BASE}/chat/completions",
+        headers={"Authorization": "Bearer test-key"},
+        json=payload.model_dump(),
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert data["model"] == "fake-cerebras"
@@ -133,17 +138,24 @@ async def test_cerebras_provider_override_success(
 
 
 @pytest.mark.asyncio
-async def test_ollama_provider_override_success(
-    monkeypatch: pytest.MonkeyPatch, client: AsyncClient
-) -> None:
-    import ai_gateway.api.routes as routes_mod
+async def test_ollama_provider_override_success(client: AsyncClient, app: FastAPI) -> None:
+    # Override the provider factory to return our fake success provider
+    from ai_gateway.api.routes import get_ollama_provider
 
-    monkeypatch.setattr(routes_mod, "OllamaProvider", lambda: FakeSuccessProvider("fake-ollama"))
+    def fake_provider_factory() -> FakeSuccessProvider:
+        return FakeSuccessProvider("fake-ollama")
+
+    app.dependency_overrides[get_ollama_provider] = fake_provider_factory
+
     payload = ChatCompletionRequest(
         model="ignored", messages=[ChatMessage(role="user", content="hi")]
     )
 
-    resp = await client.post(f"{OLLAMA_BASE}/chat/completions", json=payload.model_dump())
+    resp = await client.post(
+        f"{OLLAMA_BASE}/chat/completions",
+        headers={"Authorization": "Bearer test-key"},
+        json=payload.model_dump(),
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert data["model"] == "fake-ollama"
@@ -152,17 +164,24 @@ async def test_ollama_provider_override_success(
 
 
 @pytest.mark.asyncio
-async def test_cerebras_provider_error_normalization(
-    monkeypatch: pytest.MonkeyPatch, client: AsyncClient
-) -> None:
-    import ai_gateway.api.routes as routes_mod
+async def test_cerebras_provider_error_normalization(client: AsyncClient, app: FastAPI) -> None:
+    # Override the provider factory to return our fake error provider
+    from ai_gateway.api.routes import get_cerebras_provider
 
-    monkeypatch.setattr(routes_mod, "CerebrasProvider", lambda: FakeErrorProvider("boom"))
+    def fake_provider_factory() -> FakeErrorProvider:
+        return FakeErrorProvider("boom")
+
+    app.dependency_overrides[get_cerebras_provider] = fake_provider_factory
+
     payload = ChatCompletionRequest(
         model="ignored", messages=[ChatMessage(role="user", content="hi")]
     )
 
-    resp = await client.post(f"{CEREBRAS_BASE}/chat/completions", json=payload.model_dump())
+    resp = await client.post(
+        f"{CEREBRAS_BASE}/chat/completions",
+        headers={"Authorization": "Bearer test-key"},
+        json=payload.model_dump(),
+    )
     # Expect the global exception handler to convert ProviderError into a 502 with standardized payload
     assert resp.status_code == 502
     data = resp.json()
@@ -172,19 +191,24 @@ async def test_cerebras_provider_error_normalization(
 
 
 @pytest.mark.asyncio
-async def test_ollama_provider_error_normalization(
-    monkeypatch: pytest.MonkeyPatch, client: AsyncClient
-) -> None:
-    import ai_gateway.api.routes as routes_mod
+async def test_ollama_provider_error_normalization(client: AsyncClient, app: FastAPI) -> None:
+    # Override the provider factory to return our fake error provider
+    from ai_gateway.api.routes import get_ollama_provider
 
-    monkeypatch.setattr(
-        routes_mod, "OllamaProvider", lambda: FakeErrorProvider("downstream failed")
-    )
+    def fake_provider_factory() -> FakeErrorProvider:
+        return FakeErrorProvider("downstream failed")
+
+    app.dependency_overrides[get_ollama_provider] = fake_provider_factory
+
     payload = ChatCompletionRequest(
         model="ignored", messages=[ChatMessage(role="user", content="hi")]
     )
 
-    resp = await client.post(f"{OLLAMA_BASE}/chat/completions", json=payload.model_dump())
+    resp = await client.post(
+        f"{OLLAMA_BASE}/chat/completions",
+        headers={"Authorization": "Bearer test-key"},
+        json=payload.model_dump(),
+    )
     assert resp.status_code == 502
     data = resp.json()
     assert "error" in data

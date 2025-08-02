@@ -94,9 +94,11 @@ Completed:
 - [x] Added DI/provider override tests (tests/api/test_provider_di.py) for /v1, /cerebras/v1, and /ollama/v1 including error normalization checks.
 - [x] Fixed auth route test to use valid payload to exercise 401 path; suite green.
 - [x] Verified structured logging continues to redact sensitive data.
+- [x] Optional enhancement A: Implemented explicit provider dependency callables (Depends) in routes for more idiomatic FastAPI DI, allowing app.dependency_overrides in tests while maintaining existing behavior.
 
 Remaining Unblocked Tasks:
-- [ ] Optional enhancement: Introduce explicit provider dependency callables (Depends) in routes for more idiomatic overrides, retaining current behavior.
+- [x] Enhancement B: Client wrapper timeout and error path tests for Cerebras and Ollama providers
+- [x] Enhancement C: Documentation improvements (README and .env.example parity)
 
 Notes:
-- Coverage gaps remain primarily in config/config.py edge branches, exceptions/handlers.py unhit branches, and providers/cerebras_client.py SDK/timeout mapping. These are non-blocking. Current overall coverage at ~89%.
+- Coverage gaps remain primarily in config/config.py edge branches, exceptions/handlers.py unhit branches, and providers/cerebras_client.py SDK/timeout mapping. These are non-blocking. Current overall coverage at ~91%.
