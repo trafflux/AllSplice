@@ -80,9 +80,14 @@ class Settings(BaseSettings):
             # to satisfy decode_complex_value
             if s.startswith("[") and s.endswith("]"):
                 try:
-                    parsed = json.loads(s)
+                    parsed: Any = json.loads(s)
                     if isinstance(parsed, list):
-                        normalized = [str(item).strip() for item in parsed if str(item).strip()]
+                        # Convert all items to strings and filter out empty ones
+                        normalized: list[str] = []
+                        for item in parsed:  # pyright: ignore[reportUnknownVariableType]
+                            item_str = str(item).strip()  # pyright: ignore[reportUnknownArgumentType]
+                            if item_str:
+                                normalized.append(item_str)
                         return (json.dumps(normalized), field_name, True)
                 except Exception:
                     # fall through to CSV
@@ -198,15 +203,20 @@ class Settings(BaseSettings):
                 try:
                     import json
 
-                    parsed = json.loads(s)
+                    parsed: Any = json.loads(s)
                     if isinstance(parsed, list):
-                        return [str(item).strip() for item in parsed if str(item).strip()]
+                        # Convert all items to strings and filter out empty ones
+                        normalized: list[str] = []
+                        for item in parsed:  # pyright: ignore[reportUnknownVariableType]
+                            item_str = str(item).strip()  # pyright: ignore[reportUnknownArgumentType]
+                            if item_str:
+                                normalized.append(item_str)
+                        return normalized
                 except Exception:
                     pass
             return [item.strip() for item in s.split(",") if item.strip()]
-        if isinstance(v, list):
-            return [str(item).strip() for item in v if str(item).strip()]
-        return []
+        # v must be list[str] at this point based on the type annotation
+        return [str(item).strip() for item in v if str(item).strip()]
 
     @field_validator("DEVELOPMENT_MODE", mode="before")
     @classmethod
