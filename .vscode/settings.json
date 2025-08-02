@@ -20,6 +20,7 @@
         "source.fixAll": "explicit",
         "source.organizeImports": "explicit"
     },
+    "mypy.runUsingActiveInterpreter": true,
     "python.analysis.typeCheckingMode": "basic",
     "github.copilot.chat.agent.terminal.allowList": {
         "python": true,

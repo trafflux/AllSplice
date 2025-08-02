@@ -10,6 +10,9 @@ from ai_gateway.api.routes import (
 )
 from ai_gateway.exceptions.handlers import register_exception_handlers
 from ai_gateway.middleware.correlation import CorrelationIdMiddleware
+
+# Import locally inside get_app() to avoid any potential circular import analysis issues in editors
+# from ai_gateway.middleware.logging_middleware import StructuredLoggingMiddleware
 from ai_gateway.middleware.security_headers import SecurityHeadersMiddleware
 
 
@@ -34,6 +37,11 @@ def get_app() -> FastAPI:
     # This yields SecurityHeaders later in the list, so Correlation runs first.
     app.add_middleware(CorrelationIdMiddleware)
     app.add_middleware(SecurityHeadersMiddleware, enabled=True)
+    # Install structured logging middleware last so it runs first at runtime, capturing full duration.
+    # Local import prevents editor false-positive on circular imports.
+    from ai_gateway.middleware.logging_middleware import StructuredLoggingMiddleware
+
+    app.add_middleware(StructuredLoggingMiddleware, enabled=True)
 
     # Do NOT access settings at app creation time. CORS is disabled by default and tests that
     # require CORS will enable it by constructing a custom app or monkeypatching settings in their own client.

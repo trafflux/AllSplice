@@ -58,11 +58,14 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
         try:
             response = await call_next(request)
         finally:
-            # Always reset context to avoid leaking across requests in async server
-            _request_id_ctx.reset(token)
+            # Ensure header present on response BEFORE resetting context so filters can still read it
+            # (especially important for logging that formats after handler returns)
+            try:
+                response.headers[self.header_name] = req_id
+            finally:
+                # Always reset context to avoid leaking across requests in async server
+                _request_id_ctx.reset(token)
 
-        # Ensure header present on response
-        response.headers[self.header_name] = req_id
         return response
 
 
