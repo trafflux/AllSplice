@@ -55,11 +55,13 @@ def _parse_allowed_keys(csv: str | None) -> set[str]:
 
 async def auth_bearer(
     authorization: str | None = Header(default=None, alias=HDR_AUTHORIZATION),
-) -> str:
+) -> str | None:
     """FastAPI dependency that enforces Bearer token authentication.
 
     Validates that the bearer token in the Authorization header is present in the configured
     ALLOWED_API_KEYS list (comma-separated), with surrounding whitespace trimmed.
+
+    In DEVELOPMENT_MODE with REQUIRE_AUTH disabled, auth is bypassed to enable local testing.
 
     On failure, responds with HTTP 401 and the 'WWW-Authenticate: Bearer' header, without leaking
     secret values.
@@ -77,6 +79,10 @@ async def auth_bearer(
     # Obtain settings via the imported symbol so pytest monkeypatch on
     # "ai_gateway.config.config.get_settings" takes effect here.
     settings = config_module.get_settings()
+    # If we're explicitly in development mode AND auth is disabled by settings,
+    # bypass authentication entirely (no header required).
+    if getattr(settings, "DEVELOPMENT_MODE", False) and not getattr(settings, "REQUIRE_AUTH", True):
+        return None
 
     # Compute allowed keys BEFORE parsing the token so that any config issues don't depend
     # on token validity and tests can inject permissive settings reliably.

@@ -18,8 +18,10 @@ async def test_v1_chat_completions_unauthorized(monkeypatch: pytest.MonkeyPatch)
     app: FastAPI = get_app()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Provide a minimal valid message to satisfy request validation so we exercise auth
         r = await client.post(
-            "/v1/chat/completions", json={"model": "gpt-3.5-turbo", "messages": []}
+            "/v1/chat/completions",
+            json={"model": "gpt-3.5-turbo", "messages": [{"role": "user", "content": "hi"}]},
         )
     assert r.status_code == 401
     assert r.headers.get("WWW-Authenticate") == "Bearer"

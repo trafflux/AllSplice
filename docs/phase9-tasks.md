@@ -1,6 +1,6 @@
 # Phase 9 — Middleware & Security Hardening
 
-Status: Partially Complete
+Status: Completed
 
 Scope
 Implement correlation ID propagation, security headers, restricted CORS (disabled by default), and structured logging with redaction. Ensure strict typing and standardized error handling.
@@ -26,26 +26,23 @@ Implement correlation ID propagation, security headers, restricted CORS (disable
 - [x] tests/middleware/test_cors.py validate disabled/enabled behavior and preflight.
 
 9.4 Structured Logging — src/ai_gateway/logging/setup.py
-- [ ] Structured JSON or key-value formatter emitting:
+- [x] Structured JSON formatter emitting:
   - timestamp, level, request_id, method, path, provider, status_code, duration_ms, message
-- [ ] Redaction of known secrets (Authorization tokens, API keys) in logs.
-- [ ] Wiring via LOG_LEVEL from Settings without eager Settings construction at app creation.
-- [ ] Tests in tests/logging/test_structured_logging.py:
+- [x] Redaction of known secrets (Authorization tokens, API keys) in logs.
+- [x] Wiring via LOG_LEVEL from environment without eager Settings construction.
+- [x] Tests in tests/logging/test_structured_logging.py:
   - Inject X-Request-ID and assert log contains it.
   - Ensure sensitive values are redacted.
-Status: Pending implementation.
+Status: Implemented. Tests pass.
 
 Interactions and Notes
 - App factory get_app() avoids eager Settings construction, ensuring tests can monkeypatch get_settings before app instantiation.
 - CorrelationIdMiddleware must execute before SecurityHeaders at runtime; install order set accordingly (SecurityHeaders added first, then CorrelationId, so Correlation runs first).
 
 Current Status Summary
-- Correlation ID, Security Headers, and CORS implemented and tested.
-- Structured logging scaffolding outstanding with tests.
+- Correlation ID, Security Headers, CORS, and Structured Logging implemented and tested.
 
 Next Actions
-- [ ] Implement logging setup with redaction and request_id propagation.
-- [ ] Add tests/logging/test_structured_logging.py to assert fields and redaction.
 - [ ] Optionally expand coverage on edge branches if coverage gaps remain.
 
 Test/Coverage Snapshot (as of latest run)

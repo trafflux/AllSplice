@@ -70,6 +70,6 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
 
 
 # Dependency helper (optional)
-async def request_id_dependency() -> str | None:
+def request_id_dependency() -> str | None:
     """FastAPI Depends-compatible getter for the current request ID."""
     return get_request_id()
