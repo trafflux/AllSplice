@@ -56,8 +56,9 @@ exclude = [
     "*.egg-info",
     ".mypy_cache",
     ".ruff_cache",
-    "docs",
+    "docs/**",
     "generated_code/",
+    "*.md"
 ]
 
 [tool.ruff.lint]
