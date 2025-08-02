@@ -18,17 +18,17 @@ from . import constants
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR"]
 
 
-def _parse_csv(value: str | list[str] | None) -> list[str]:
-    """
-    Parse a CSV string or list into a normalized list of non-empty, trimmed strings.
-    """
-    if value is None:
-        return []
-    if isinstance(value, list):
-        items = value
-    else:
-        items = value.split(",")
-    return [item.strip() for item in items if item.strip()]
+# def _parse_csv(value: str | list[str] | None) -> list[str]:
+#     """
+#     Parse a CSV string or list into a normalized list of non-empty, trimmed strings.
+#     """
+#     if value is None:
+#         return []
+#     if isinstance(value, list):
+#         items = value
+#     else:
+#         items = value.split(",")
+#     return [item.strip() for item in items if item.strip()]
 
 
 class Settings(BaseSettings):
@@ -98,7 +98,7 @@ class Settings(BaseSettings):
         env_settings: PydanticBaseSettingsSource,
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
-    ):
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
         """
         Order sources so our custom ALLOWED_API_KEYS parsing happens before the default env source.
         """
@@ -196,13 +196,11 @@ class Settings(BaseSettings):
                 except Exception:
                     pass
             return [item.strip() for item in s.split(",") if item.strip()]
-        if isinstance(v, list):
-            return [str(item).strip() for item in v if str(item).strip()]
-        return []
+        return [str(item).strip() for item in v if str(item).strip()]
 
     @field_validator("DEVELOPMENT_MODE", mode="before")
     @classmethod
-    def _infer_dev_mode(cls, v: bool | str | None, info):
+    def _infer_dev_mode(cls, v: bool | str | None, info: Any) -> bool:
         # If DEVELOPMENT_MODE is explicitly set, respect it.
         if isinstance(v, bool):
             return v
@@ -217,7 +215,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="before")
     @classmethod
-    def _capture_raw_env(cls, data: dict) -> dict:
+    def _capture_raw_env(cls, data: dict[str, object]) -> dict[str, object]:
         # No-op placeholder; reserved for future pre-processing if needed.
         return data
 
@@ -251,8 +249,7 @@ class Settings(BaseSettings):
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """
-    Return a cached Settings instance. Cache can be cleared in tests via
+    """Return a cached Settings instance. Cache can be cleared in tests via
     get_settings.cache_clear().
     """
     return Settings()  # type: ignore[call-arg]

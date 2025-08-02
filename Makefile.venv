@@ -1,0 +1,41 @@
+# Makefile for AllSplice project
+
+.PHONY: venv install precommit test lint format
+
+venv:
+	uv venv .venv
+
+install: venv
+	source .venv/bin/activate && uv pip install . --system
+
+precommit: install
+	source .venv/bin/activate && pre-commit clean && pre-commit install --install-hooks
+
+lint:
+	source .venv/bin/activate && ruff check src tests
+
+format:
+	source .venv/bin/activate
+
+test:
+	source .venv/bin/activate && PYTHONPATH=src pytest
+.PHONY: lint format type test test-cov run hooks
+
+lint:
+	ruff .
+
+type:
+	mypy src
+
+test:
+	pytest
+
+test-cov:
+	pytest --cov=src --cov-report=term-missing
+
+run:
+	uvicorn ai_gateway.api.app:get_app --reload --host 0.0.0.0 --port 8000
+
+hooks:
+	pre-commit install
+	pre-commit run --all-files

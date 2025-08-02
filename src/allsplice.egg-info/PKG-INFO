@@ -20,6 +20,5 @@ Requires-Dist: pytest-asyncio
 Requires-Dist: pytest-cov
 Requires-Dist: ruff
 Requires-Dist: mypy
-Requires-Dist: black
 Requires-Dist: pre-commit
 Requires-Dist: types-requests

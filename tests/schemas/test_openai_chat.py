@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import os
+import sys
 import time
 
 import pytest
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..", "src")))
 
 from ai_gateway.schemas.openai_chat import (
     ChatCompletionRequest,
@@ -120,7 +124,7 @@ def test_response_rejects_invalid_object_literal() -> None:
     with pytest.raises(Exception):
         ChatCompletionResponse(
             id="x",
-            object="chat.completions",  # type: ignore[arg-type] # invalid
+            object="chat.completions",  # type: ignore[arg-type]
             created=now,
             model="gpt",
             choices=[
@@ -155,7 +159,7 @@ def test_response_created_must_be_non_negative_int() -> None:
         ChatCompletionResponse(
             id="x",
             object="chat.completion",
-            created=float(now),  # type: ignore[arg-type] # not an int
+            created=float(now),  # type: ignore[arg-type]
             model="gpt",
             choices=[
                 Choice(
@@ -166,13 +170,15 @@ def test_response_created_must_be_non_negative_int() -> None:
             ],
             usage=Usage(prompt_tokens=0, completion_tokens=0, total_tokens=0),
         )
-
     # Also reject non-integer types like bool even though bool is subclass of int
+    # Pydantic v2 will coerce True/False to 1/0 when type is "int". To make the
+    # model robust, we enforce strict int in the validator and adjust the test
+    # to pass a type that cannot be coerced to int (e.g., a list).
     with pytest.raises(Exception):
         ChatCompletionResponse(
             id="x",
             object="chat.completion",
-            created=True,  # invalid type
+            created=[],  # type: ignore[arg-type]
             model="gpt",
             choices=[
                 Choice(

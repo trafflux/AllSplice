@@ -1,31 +1,23 @@
 # Makefile for AllSplice project
 
-.PHONY: venv install precommit test lint format
+.PHONY: install precommit test lint format
 
-venv:
-	uv venv .venv
-
-install: venv
-	source .venv/bin/activate && uv pip install .
+install:
+	uv pip install . --system
 
 precommit: install
-	source .venv/bin/activate && pre-commit clean && pre-commit install --install-hooks
+	pre-commit clean && pre-commit install --install-hooks
 
 lint:
-	source .venv/bin/activate && ruff check src tests
-
-format:
-	source .venv/bin/activate && black src tests
+	ruff check src tests
 
 test:
-	source .venv/bin/activate && PYTHONPATH=src pytest
+	PYTHONPATH=src pytest
+
 .PHONY: lint format type test test-cov run hooks
 
 lint:
 	ruff .
-
-format:
-	black .
 
 type:
 	mypy src

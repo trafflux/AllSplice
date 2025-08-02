@@ -107,7 +107,7 @@ class ChatCompletionResponse(BaseModel):
             raise ValueError("id must be a non-empty string")
         return s
 
-    @field_validator("created")
+    @field_validator("created", mode="before")
     @classmethod
     def _created_epoch_int(cls, v: int) -> int:
         # Pydantic may pass bools as ints; ensure strict int and non-negative

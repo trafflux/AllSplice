@@ -18,17 +18,17 @@ from . import constants
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR"]
 
 
-def _parse_csv(value: str | list[str] | None) -> list[str]:
-    """
-    Parse a CSV string or list into a normalized list of non-empty, trimmed strings.
-    """
-    if value is None:
-        return []
-    if isinstance(value, list):
-        items = value
-    else:
-        items = value.split(",")
-    return [item.strip() for item in items if item.strip()]
+# def _parse_csv(value: str | list[str] | None) -> list[str]:
+#     """
+#     Parse a CSV string or list into a normalized list of non-empty, trimmed strings.
+#     """
+#     if value is None:
+#         return []
+#     if isinstance(value, list):
+#         items = value
+#     else:
+#         items = value.split(",")
+#     return [item.strip() for item in items if item.strip()]
 
 
 class Settings(BaseSettings):

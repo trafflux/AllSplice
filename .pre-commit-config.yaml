@@ -1,9 +1,4 @@
 repos:
-  - repo: https://github.com/psf/black
-    rev: 24.4.2
-    hooks:
-      - id: black
-        args: ["--line-length=100"]
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.5.0
     hooks:
@@ -21,4 +16,20 @@ repos:
     rev: v4.6.0
     hooks:
       - id: end-of-file-fixer
+        exclude: |
+          (?x)^(
+            \.vscode/.*|
+            \.devcontainer/.*|
+            pyrightconfig\.json|
+            .*\.egg-info/.*|
+            Makefile.*
+          )$
       - id: trailing-whitespace
+        exclude: |
+          (?x)^(
+            \.vscode/.*|
+            \.devcontainer/.*|
+            pyrightconfig\.json|
+            .*\.egg-info/.*|
+            Makefile.*
+          )$

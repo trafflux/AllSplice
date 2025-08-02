@@ -1,0 +1,30 @@
+{
+    "name": "Python Dev (AllSplice)",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "context": ".."
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "ms-python.vscode-pylance",
+                "ms-azuretools.vscode-docker",
+                "saoudrizwan.claude-dev",
+                "ms-python.mypy-type-checker"
+            ],
+            "settings": {
+                "python.defaultInterpreterPath": "/usr/local/bin/python",
+                "python.terminal.activateEnvironment": false
+            }
+        }
+    },
+    "workspaceFolder": "/workspace",
+    "mounts": [
+        "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=delegated"
+    ],
+    "remoteUser": "root",
+    "runArgs": [
+        "--network=devnet"
+    ]
+}

@@ -23,7 +23,6 @@ dependencies = [
     "pytest-cov",
     "ruff",
     "mypy",
-    "black",
     "pre-commit",
     "types-requests"
 ]
@@ -35,3 +34,38 @@ dependencies = [
 addopts = "-q -ra -W error::DeprecationWarning --cov=src --cov-report=term-missing"
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+[tool.ruff]
+# Exclude files/directories from linting and formatting
+exclude = [
+    ".git",
+    "__pycache__",
+    "build",        # Common build output directory
+    "dist",         # Python package distribution directory
+    "venv",         # Virtual environment
+    ".venv",        # Common alternative for virtual environment
+    "*.pyc",        # Compiled Python files
+    "*.egg-info",   # Python package metadata
+    ".mypy_cache",  # MyPy's cache directory
+    ".ruff_cache",  # Ruff's cache directory
+    "docs",         # Often has example code or generated files not meant for linting
+    "tests",        # If your tests have different linting rules or are skipped
+    "generated_code/", # Any directory containing auto-generated files
+]
+
+[tool.mypy]
+# ... other MyPy settings ...
+
+# Exclude files/directories from type checking
+exclude = [
+    "venv/",          # Virtual environment
+    ".venv/",       # Alternative virtual environment
+    "build/",         # Common build output directory
+    "dist/",          # Python package distribution directory
+    "setup.py",     # Often not strictly type-hinted or standard code
+    "tests/",         # If tests are not type-checked or have different strictness
+    "generated_code/",# Any directory containing auto-generated files
+    "docs/",          # Often contains example code not fully type-checked
+    # Add any other paths that are generated or contain third-party code
+    # that you don't want MyPy to analyze.
+]

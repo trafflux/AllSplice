@@ -1,12 +1,84 @@
 {
-    "python.analysis.exclude": [
-        "*.env",
-        "*.venv",
-        "*.specstory",
-        "*.mypy_cache",
-        "*.pycache__",
-        "*.pytest_cache",
-        "*.ruff_cache",
-        "*.coverage"
-    ]
+    // --- Python Extension Settings (Core) ---
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python", // Or wherever your virtual environment Python is
+    "python.analysis.diagnosticMode": "workspace", // Analyze the whole workspace for errors/warnings
+    "python.analysis.indexing": true, // Improves IntelliSense for large projects
+    // --- Ruff Extension Settings ---
+    "editor.formatOnSave": true, // Enable format on save for the editor
+    "editor.defaultFormatter": "charliermarsh.ruff", // Set Ruff as the default formatter for Python files
+    "editor.codeActionsOnSave": {
+        "source.organizeImports": "explicit", // Let Ruff handle import organizing on save
+        "source.fixAll": "explicit" // Let Ruff fix all auto-fixable errors on save
+    },
+    "[python]": {
+        "editor.defaultFormatter": "charliermarsh.ruff" // Explicitly set Ruff for Python files
+    },
+    // --- Optional: Testing settings (e.g., pytest) ---
+    "python.testing.pytestEnabled": true,
+    "python.testing.pytestArgs": [
+        "tests"
+    ],
+    "python.testing.cwd": "${workspaceFolder}",
+    "python.languageServer": "Pylance",
+    "[jsonc]": {
+        "editor.defaultFormatter": "vscode.json-language-features"
+    },
+    // --- MyPy Type Checker Extension Settings ---
+    // 1. Tell the extension to use the MyPy from your virtual environment
+    // This is crucial to ensure it uses the same MyPy version and installed stubs
+    "mypy-type-checker.importStrategy": "fromEnvironment",
+    // Optional: If "fromEnvironment" doesn't work or you want to be explicit,
+    // you can point directly to the mypy executable:
+    // "mypy-type-checker.path": ["${workspaceFolder}/.venv/bin/mypy"], // For Linux/macOS
+    // "mypy-type-checker.path": ["${workspaceFolder}/.venv/Scripts/mypy.exe"], // For Windows
+    // OR if using dmypy:
+    // "mypy-type-checker.path": ["${workspaceFolder}/.venv/bin/dmypy"], // For Linux/macOS
+    // "mypy-type-checker.path": ["${workspaceFolder}/.venv/Scripts/dmypy.exe"], // For Windows
+    // 2. Pass arguments to MyPy (to ensure it uses pyproject.toml)
+    // The extension states "mypy-type-checker.cwd" with "${nearestConfig}" can find it,
+    // but being explicit with --config-file is often more reliable.
+    "mypy-type-checker.args": [
+        // Ensure MyPy reads your project's pyproject.toml config
+        "--config-file=${workspaceFolder}/pyproject.toml",
+        // Add any other global MyPy CLI args you might need here
+        // For example, if you explicitly want to check a specific directory:
+        // "src"
+    ],
+    // 3. Set the reporting scope to the entire workspace
+    "mypy-type-checker.reportingScope": "workspace",
+    // 4. (Optional) Prefer the MyPy daemon (dmypy) for faster checks
+    // This requires `dmypy` to be installed and available in your environment.
+    // Ensure you have mypy installed with daemon support (usually comes with mypy)
+    // If you explicitly set `mypy-type-checker.path` to `mypy`, this setting is overridden.
+    "mypy-type-checker.preferDaemon": true,
+    // 5. Set the current working directory for MyPy
+    // Using ${nearestConfig} is good, as MyPy will look for pyproject.toml
+    // or mypy.ini in the current directory or parent directories.
+    "mypy-type-checker.cwd": "${nearestConfig}",
+    // 6. Customize severity mapping (optional, useful for fine-tuning UX)
+    // This example makes 'note' messages appear as 'Information' in VS Code.
+    // You can also override specific MyPy error codes here.
+    "mypy-type-checker.severity": {
+        "error": "Error",
+        "note": "Information"
+        // "attr-defined": "Warning" // Example: make 'attribute not defined' a warning instead of error
+    },
+    // 7. Ignore patterns (optional, but good for skipping specific files/folders)
+    // These are glob patterns, not regex, and are separate from pyproject.toml's `exclude`.
+    // Use this for files/folders you want the *extension itself* to ignore for performance/noise.
+    "mypy-type-checker.ignorePatterns": [
+        "**/node_modules/**", // Example for Node.js projects
+        "**/build/**",
+        "**/dist/**",
+        "**/__pycache__/**"
+        // You generally don't need to ignore venv/build/dist here if they are in your .gitignore
+        // and your MyPy pyproject.toml exclude is well-configured, as the extension
+        // might already implicitly skip them.
+    ],
+    "github.copilot.chat.agent.terminal.allowList": {
+        "python": true,
+        "mypy": true
+    },
+    // 8. Control notifications (optional)
+    // "mypy-type-checker.showNotifications": "off" // Set to "onError" or "onWarning" if you prefer
 }
