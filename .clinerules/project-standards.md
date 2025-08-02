@@ -5,17 +5,20 @@ Authoritative engineering standards for the Universal AI Gateway v1.0 and future
 ## 1. Language, Runtime, and Style
 
 - Python: 3.12+ required.
-- Use uv and pyproject.toml for dependency management.
+- Use uv and pyproject.toml for dependency management. Configure uv with `system = true` for Docker containers.
 - Typing: strict type hints for all public functions, methods, classes, and module variables. Codebase must be mypy-clean under strict settings.
 - Linting/Formatting:
-  - Ruff for linting (include rules for imports, complexity, naming).
-  - Formatting via ruff-format or black (choose one and apply globally).
-  - Pre-commit hooks mandatory (ruff, formatter, mypy, whitespace, EOF newline).
+  - Ruff for linting AND formatting (unified tool). Configuration in pyproject.toml only.
+  - Selected rules: E, F, W, N, I, C90, UP, B, A, C4, T20, SIM
+  - Complexity limit: max 10 (mccabe)
+  - Line length: 100 characters
+  - Pre-commit hooks mandatory: ruff check, ruff format, mypy, whitespace, EOF newline.
 - Code Quality:
   - No unused code/vars; no wildcard imports.
   - No broad except clauses; catch specific exceptions.
-  - Keep functions cohesive and small; cyclomatic complexity kept low (<10 recommended).
+  - Keep functions cohesive and small; cyclomatic complexity kept low (<10 enforced).
   - Docstrings for all public classes and functions (Google or NumPy style).
+  - Use isort settings: known-first-party = ["ai_gateway"], combine-as-imports = true
 
 ## 2. Project Structure
 
@@ -187,8 +190,10 @@ docs/             # examples and additional docs (optional)
 ## 14. Dependency Management
 
 - Manage dependencies in `pyproject.toml`; pin major versions.
+- Use uv with `system = true` for Docker container deployments.
 - Minimize dependencies; periodically update with CI verification.
-- Use a lock strategy consistent with uv.
+- Use uv lock files for reproducible builds.
+- All tool configurations (ruff, mypy, pytest) must be in pyproject.toml - no separate config files.
 
 ## 15. Deployment and Operations
 
@@ -209,6 +214,27 @@ docs/             # examples and additional docs (optional)
 - PRD retained in repo (`PRD-1.0.md`).
 - Maintain `CHANGELOG.md` per release.
 - Public APIs and critical modules have docstrings and usage notes.
+
+## 18. Tool Configuration Standards
+
+- **Single Source**: All tool configurations must be in `pyproject.toml`. No separate config files (ruff.toml, mypy.ini, etc).
+- **Ruff Configuration**:
+  - target-version = "py312", line-length = 100
+  - Selected rules: E, F, W, N, I, C90, UP, B, A, C4, T20, SIM
+  - mccabe max-complexity = 10
+  - isort: known-first-party = ["ai_gateway"], combine-as-imports = true
+  - Allow broad Exception in tests (B017), allow print statements (T201)
+  - Use modern Python syntax: `X | None` over `Optional[X]`, `list[X]` over `List[X]`
+- **MyPy Configuration**:
+  - strict = true, python_version = "3.12"
+  - mypy_path = "src", show_error_codes = true
+  - warn_unused_ignores, warn_redundant_casts, disallow_untyped_defs
+  - Tests: disallow_untyped_defs = false (override)
+- **Pytest Configuration**:
+  - asyncio_mode = "auto", testpaths = ["tests"]
+  - Coverage: --cov=src --cov-report=term-missing
+- **UV Configuration**:
+  - system = true (for Docker containers, no venv)
 
 ## 17. Acceptance Criteria for v1.0
 

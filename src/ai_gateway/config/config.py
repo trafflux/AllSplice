@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 from functools import lru_cache
-from typing import Any, Literal, Optional, Tuple
+from typing import Any, Literal
 
 from pydantic import AnyHttpUrl, Field, HttpUrl, field_validator, model_validator
 from pydantic_settings import (
@@ -62,7 +62,7 @@ class Settings(BaseSettings):
         def __init__(self, settings_cls: type[BaseSettings]):
             super().__init__(settings_cls)
 
-        def get_field_value(self, field: Any, field_name: str) -> Tuple[Any, str, bool]:
+        def get_field_value(self, field: Any, field_name: str) -> tuple[Any, str, bool]:
             # Only intercept ALLOWED_API_KEYS; otherwise delegate
             if field_name != "ALLOWED_API_KEYS":
                 return super().get_field_value(field, field_name)
@@ -123,7 +123,7 @@ class Settings(BaseSettings):
             def __init__(self, settings_cls: type[BaseSettings]):
                 super().__init__(settings_cls)
 
-            def get_field_value(self, field: Any, field_name: str) -> Tuple[Any, str, bool]:
+            def get_field_value(self, field: Any, field_name: str) -> tuple[Any, str, bool]:
                 if field_name == "ALLOWED_API_KEYS":
                     # Signal this source does not provide a value for this field
                     return (None, field_name, False)
@@ -177,9 +177,9 @@ class Settings(BaseSettings):
     ENABLE_SECURITY_HEADERS: bool = Field(default=True)
 
     # Provider configuration
-    CEREBRAS_API_KEY: Optional[str] = Field(default=None)
-    CEREBRAS_BASE_URL: Optional[HttpUrl | AnyHttpUrl | str] = Field(default=None)
-    OLLAMA_HOST: Optional[HttpUrl | AnyHttpUrl | str] = Field(default=None)
+    CEREBRAS_API_KEY: str | None = Field(default=None)
+    CEREBRAS_BASE_URL: HttpUrl | AnyHttpUrl | str | None = Field(default=None)
+    OLLAMA_HOST: HttpUrl | AnyHttpUrl | str | None = Field(default=None)
 
     # Timeouts
     REQUEST_TIMEOUT_S: int = Field(default=constants.DEFAULT_REQUEST_TIMEOUT_S, gt=0)
@@ -189,7 +189,7 @@ class Settings(BaseSettings):
     DEVELOPMENT_MODE: bool = Field(default=False)
 
     # Deprecated: internal/raw tracking not used; keep for forward-compat if needed.
-    ALLOWED_API_KEYS_RAW: Optional[str] = Field(default=None, exclude=True)
+    ALLOWED_API_KEYS_RAW: str | None = Field(default=None, exclude=True)
 
     @field_validator("ALLOWED_API_KEYS", mode="before")
     @classmethod
@@ -259,7 +259,7 @@ class Settings(BaseSettings):
     # Enforce ALLOWED_API_KEYS policy after all fields are resolved to ensure
     # REQUIRE_AUTH and DEVELOPMENT_MODE final values are available.
     @model_validator(mode="after")
-    def _validate_allowed_api_keys_policy(self) -> "Settings":
+    def _validate_allowed_api_keys_policy(self) -> Settings:
         if self.REQUIRE_AUTH and not self.DEVELOPMENT_MODE and not self.ALLOWED_API_KEYS:
             raise ValueError(
                 "ALLOWED_API_KEYS must not be empty when REQUIRE_AUTH=True "

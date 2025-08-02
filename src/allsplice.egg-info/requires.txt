@@ -9,6 +9,8 @@ python-dotenv
 httpx
 anyio
 typing-extensions
+
+[dev]
 pytest
 pytest-asyncio
 pytest-cov

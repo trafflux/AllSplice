@@ -1,9 +1,11 @@
 README.md
 pyproject.toml
 src/ai_gateway/__init__.py
+src/ai_gateway/py.typed
 src/ai_gateway/config/__init__.py
 src/ai_gateway/config/config.py
 src/ai_gateway/config/constants.py
+src/ai_gateway/schemas/ __init__.py
 src/ai_gateway/schemas/openai_chat.py
 src/allsplice.egg-info/PKG-INFO
 src/allsplice.egg-info/SOURCES.txt

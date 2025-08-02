@@ -15,10 +15,11 @@ Requires-Dist: python-dotenv
 Requires-Dist: httpx
 Requires-Dist: anyio
 Requires-Dist: typing-extensions
-Requires-Dist: pytest
-Requires-Dist: pytest-asyncio
-Requires-Dist: pytest-cov
-Requires-Dist: ruff
-Requires-Dist: mypy
-Requires-Dist: pre-commit
-Requires-Dist: types-requests
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: pytest-asyncio; extra == "dev"
+Requires-Dist: pytest-cov; extra == "dev"
+Requires-Dist: ruff; extra == "dev"
+Requires-Dist: mypy; extra == "dev"
+Requires-Dist: pre-commit; extra == "dev"
+Requires-Dist: types-requests; extra == "dev"

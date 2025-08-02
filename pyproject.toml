@@ -32,7 +32,8 @@ dev = [
 ]
 
 [tool.uv]
-# Optional: you can add uv-specific settings here
+# Configure for Docker container usage - no virtual environment needed
+# Use UV_SYSTEM_PYTHON=1 environment variable instead
 
 [tool.pytest.ini_options]
 addopts = "-q -ra -W error::DeprecationWarning --cov=src --cov-report=term-missing"
@@ -40,36 +41,83 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 
 [tool.ruff]
+target-version = "py312"
+line-length = 100
+
 # Exclude files/directories from linting and formatting
 exclude = [
     ".git",
     "__pycache__",
-    "build",        # Common build output directory
-    "dist",         # Python package distribution directory
-    "venv",         # Virtual environment
-    ".venv",        # Common alternative for virtual environment
-    "*.pyc",        # Compiled Python files
-    "*.egg-info",   # Python package metadata
-    ".mypy_cache",  # MyPy's cache directory
-    ".ruff_cache",  # Ruff's cache directory
-    "docs",         # Often has example code or generated files not meant for linting
-    "tests",        # If your tests have different linting rules or are skipped
-    "generated_code/", # Any directory containing auto-generated files
+    "build",
+    "dist",
+    "venv",
+    ".venv",
+    "*.pyc",
+    "*.egg-info",
+    ".mypy_cache",
+    ".ruff_cache",
+    "docs",
+    "generated_code/",
 ]
 
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle errors
+    "F",     # pyflakes
+    "W",     # pycodestyle warnings
+    "N",     # pep8-naming
+    "I",     # isort
+    "C90",   # mccabe complexity
+    "UP",    # pyupgrade
+    "B",     # flake8-bugbear
+    "A",     # flake8-builtins
+    "C4",    # flake8-comprehensions
+    "T20",   # flake8-print
+    "SIM",   # flake8-simplify
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "T201",  # print found (allow prints for now)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "B017",  # allow assert blindly on Exception in tests
+    "SIM117", # allow nested with statements in tests for clarity
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["ai_gateway"]
+combine-as-imports = true
+force-single-line = false
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
 [tool.mypy]
-# ... other MyPy settings ...
+python_version = "3.12"
+strict = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+pretty = true
+mypy_path = "src"
+show_error_codes = true
+warn_unreachable = true
+warn_no_return = true
 
 # Exclude files/directories from type checking
 exclude = [
-    "venv/",          # Virtual environment
-    ".venv/",       # Alternative virtual environment
-    "build/",         # Common build output directory
-    "dist/",          # Python package distribution directory
-    "setup.py",     # Often not strictly type-hinted or standard code
-    "tests/",         # If tests are not type-checked or have different strictness
-    "generated_code/",# Any directory containing auto-generated files
-    "docs/",          # Often contains example code not fully type-checked
-    # Add any other paths that are generated or contain third-party code
-    # that you don't want MyPy to analyze.
+    "build/",
+    "dist/",
+    "venv/",
+    ".venv/",
+    "generated_code/",
+    "docs/",
+    ".*\\.egg-info/",
 ]
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false

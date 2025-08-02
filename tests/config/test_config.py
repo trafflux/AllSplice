@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Iterator
 
 import pytest
 
@@ -96,7 +96,7 @@ def test_log_level_normalization(level: str) -> None:
         }
     ):
         s = Settings()
-        assert s.LOG_LEVEL == level.upper()
+        assert level.upper() == s.LOG_LEVEL
 
 
 def test_invalid_log_level_raises():
