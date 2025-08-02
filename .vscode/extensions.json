@@ -4,6 +4,7 @@
         "ms-python.vscode-pylance",
         "charliermarsh.ruff",
         "ms-python.mypy-type-checker",
-        "matangover.mypy"
+        "matangover.mypy",
+         "ms-ossdata.vscode-pgsql"
     ]
 }

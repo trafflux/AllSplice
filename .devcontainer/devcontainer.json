@@ -17,27 +17,50 @@
                 "github.copilot-chat"
             ],
             "settings": {
-                // Use system Python in container, no venvs
+                // "python.linting.enabled": false,
                 "python.defaultInterpreterPath": "/usr/local/bin/python",
                 "python.terminal.activateEnvironment": false,
-                // Ruff as linter/formatter
-                "editor.formatOnSave": true,
-                "python.linting.enabled": false,
-                // Pylance analysis config (loose)
-                "python.analysis.extraPaths": [
-                    "./src"
-                ],
+                "python.languageServer": "Pylance",
+                "python.analysis.diagnosticMode": "workspace",
                 "python.analysis.indexing": true,
                 "python.analysis.autoSearchPaths": true,
-                "python.analysis.diagnosticMode": "workspace",
-                "python.analysis.typeCheckingMode": "basic",
                 "python.analysis.useLibraryCodeForTypes": true,
-                // Test discovery
+                "files.insertFinalNewline": true,
+                "files.trimTrailingWhitespace": true,
+                // Python / Testing
                 "python.testing.pytestEnabled": true,
                 "python.testing.pytestArgs": [
                     "tests"
                 ],
+                "[jsonc]": {
+                    "editor.defaultFormatter": "vscode.json-language-features"
+                },
+                // Test discovery
                 "python.testing.unittestEnabled": false
+                // "python.defaultInterpreterPath": "/usr/local/bin/python",
+                // "python.terminal.activateEnvironment": false,
+                // "editor.formatOnSave": true,
+                // "python.linting.enabled": false,
+                // "python.analysis.extraPaths": [
+                //     "./src"
+                // ],
+                // "editor.defaultFormatter": "charliermarsh.ruff",
+                // "editor.codeActionsOnSave": {
+                //     "source.fixAll": "explicit",
+                //     "source.organizeImports": "explicit"
+                // },
+                // "python.analysis.indexing": true,
+                // "python.analysis.autoSearchPaths": true,
+                // "python.analysis.diagnosticMode": "workspace",
+                // "python.analysis.typeCheckingMode": "basic",
+                // "python.analysis.useLibraryCodeForTypes": true
+                //DISABLED FOR NOW
+                // Test discovery
+                // "python.testing.pytestEnabled": true,
+                // "python.testing.pytestArgs": [
+                //     "tests"
+                // ],
+                // "python.testing.unittestEnabled": false
             }
         }
     },
@@ -49,5 +72,5 @@
     "runArgs": [
         "--network=devnet"
     ],
-    "postCreateCommand": "uv --version && python --version && ruff --version && if [ -f /workspace/.clinerules/cline_mcp_settings.json ]; then mkdir -p /root/.vscode-server/data/User/globalStorage/saoudrizwan.claude-dev/settings && cp /workspace/.clinerules/cline_mcp_settings.json /root/.vscode-server/data/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json; fi"
+    "postCreateCommand": "if [ -f /workspace/.clinerules/cline_mcp_settings.json ]; then mkdir -p /root/.vscode-server/data/User/globalStorage/saoudrizwan.claude-dev/settings && cp /workspace/.clinerules/cline_mcp_settings.json /root/.vscode-server/data/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json; fi"
 }

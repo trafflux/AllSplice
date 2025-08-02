@@ -23,3 +23,7 @@ ENV PATH="/usr/local/bin:$PATH"
 
 # Install dependencies
 RUN uv pip install -r pyproject.toml --system .[dev]
+
+# ENV PYTHONPATH=/workspace/src
+
+RUN python --version && uv --version

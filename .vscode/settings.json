@@ -1,21 +1,4 @@
 {
-    // Use Ruff as the formatter and linter (native VSCode extension)
-    "[python]": {
-        "editor.formatOnSave": true,
-        "editor.defaultFormatter": "charliermarsh.ruff",
-        "editor.codeActionsOnSave": {
-            "source.fixAll": "explicit",
-            "source.organizeImports": "explicit"
-        }
-    },
-    // Python / Testing
-    "python.testing.pytestEnabled": true,
-    "python.testing.pytestArgs": [
-        "tests"
-    ],
-    "files.insertFinalNewline": true,
-    "files.trimTrailingWhitespace": true,
-    // Ruff (official extension)
     // Ruff as linter and formatter
     "ruff.enable": true,
     "ruff.configuration": "pyproject.toml", // absolute path for container
@@ -23,9 +6,27 @@
     "ruff.importStrategy": "fromEnvironment", // use ruff from your container, not bundled
     "ruff.organizeImports": true,
     "ruff.fixAll": true,
-    // MyPy (official extension)
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "charliermarsh.ruff",
     "mypy.enabled": true,
     "python.languageServer": "Pylance",
     "python.analysis.diagnosticMode": "workspace",
-    // "mypy.runUsingActiveInterpreter": true
+    "python.testing.unittestEnabled": false,
+    "python.defaultInterpreterPath": "/usr/local/bin/python",
+    "python.analysis.extraPaths": [
+        "./src"
+    ],
+    "editor.codeActionsOnSave": {
+        "source.fixAll": "explicit",
+        "source.organizeImports": "explicit"
+    },
+    "python.analysis.typeCheckingMode": "basic",
+    "github.copilot.chat.agent.terminal.allowList": {
+        "python": true,
+        "uv": true,
+        "uvicorn": true,
+        "pytest": true,
+        "mypy": true,
+        "ruff": true
+    },
 }
