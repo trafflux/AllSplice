@@ -1,0 +1,9 @@
+{
+    "mcpServers": {
+        "DOCKER": {
+            "url": "http://host.docker.internal:8811/sse",
+            "disabled": false,
+            "autoApprove": []
+        }
+    }
+}

@@ -1,0 +1,51 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "ruff: format",
+            "type": "shell",
+            "command": "ruff format ."
+        },
+        {
+            "label": "ruff: check",
+            "type": "shell",
+            "command": "ruff check --config pyproject.toml ."
+        },
+        {
+            "label": "mypy",
+            "type": "shell",
+            "command": "mypy --config-file pyproject.toml --show-error-codes ."
+        },
+        {
+            "label": "tests",
+            "type": "shell",
+            "command": "pytest -q"
+        },
+        {
+            "label": "pre-commit: run all",
+            "type": "shell",
+            "command": "pre-commit run --all-files"
+        },
+        {
+            "label": "ruff: check (Problems tab)",
+            "type": "shell",
+            "command": "ruff check . --output-format=azure --config pyproject.toml",
+            "problemMatcher": {
+                "owner": "python",
+                "fileLocation": [
+                    "relative",
+                    "/"
+                ],
+                "pattern": {
+                    "regexp": "^##vso\\[task.logissue type=error;sourcepath=(.*?);linenumber=(\\d+);columnnumber=(\\d+);code=(\\w+);\\](.*)$",
+                    "file": 1,
+                    "line": 2,
+                    "column": 3,
+                    "code": 4,
+                    "message": 5
+                }
+            },
+            "group": "test"
+        }
+    ]
+}

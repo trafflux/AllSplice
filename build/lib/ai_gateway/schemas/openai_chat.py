@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Literal, Optional, Union
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -35,15 +35,15 @@ class ChatCompletionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     model: str
-    messages: List[ChatMessage]
+    messages: list[ChatMessage]
 
-    temperature: Optional[float] = Field(default=None, ge=0, le=2)
-    max_tokens: Optional[int] = Field(default=None, gt=0)
-    top_p: Optional[float] = Field(default=None, ge=0, le=1)
-    n: Optional[int] = Field(default=None, ge=1)
-    stop: Optional[Union[List[str], str]] = None
-    presence_penalty: Optional[float] = None
-    frequency_penalty: Optional[float] = None
+    temperature: float | None = Field(default=None, ge=0, le=2)
+    max_tokens: int | None = Field(default=None, gt=0)
+    top_p: float | None = Field(default=None, ge=0, le=1)
+    n: int | None = Field(default=None, ge=1)
+    stop: list[str] | str | None = None
+    presence_penalty: float | None = None
+    frequency_penalty: float | None = None
 
     @field_validator("model")
     @classmethod
@@ -55,7 +55,7 @@ class ChatCompletionRequest(BaseModel):
 
     @field_validator("messages")
     @classmethod
-    def _messages_non_empty(cls, v: List[ChatMessage]) -> List[ChatMessage]:
+    def _messages_non_empty(cls, v: list[ChatMessage]) -> list[ChatMessage]:
         if not v:
             raise ValueError("messages must contain at least one message")
         return v
@@ -96,7 +96,7 @@ class ChatCompletionResponse(BaseModel):
     object: Literal["chat.completion"]
     created: int
     model: str
-    choices: List[Choice]
+    choices: list[Choice]
     usage: Usage
 
     @field_validator("id")
@@ -107,7 +107,7 @@ class ChatCompletionResponse(BaseModel):
             raise ValueError("id must be a non-empty string")
         return s
 
-    @field_validator("created")
+    @field_validator("created", mode="before")
     @classmethod
     def _created_epoch_int(cls, v: int) -> int:
         # Pydantic may pass bools as ints; ensure strict int and non-negative
@@ -119,7 +119,7 @@ class ChatCompletionResponse(BaseModel):
 
     @field_validator("choices")
     @classmethod
-    def _choices_non_empty(cls, v: List[Choice]) -> List[Choice]:
+    def _choices_non_empty(cls, v: list[Choice]) -> list[Choice]:
         if not v:
             raise ValueError("choices must contain at least one item")
         return v

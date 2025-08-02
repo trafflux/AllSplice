@@ -10,12 +10,16 @@ RUN curl -Ls https://astral.sh/uv/install.sh | bash
 # Add uv to PATH
 ENV PATH="/root/.local/bin:$PATH"
 
-# Copy your requirements
-COPY pyproject.toml pyproject.toml
+WORKDIR /workspace
 
+# Copy your requirements
+COPY pyproject.toml uv.lock ./
+
+# Copy source
+COPY src ./src
 
 # Explicitly add /usr/local/bin to PATH for this build stage
 ENV PATH="/usr/local/bin:$PATH"
 
 # Install dependencies
-RUN uv pip install -r pyproject.toml --system
+RUN uv pip install -r pyproject.toml --system .[dev]

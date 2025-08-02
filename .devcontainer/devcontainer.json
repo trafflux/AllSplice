@@ -11,11 +11,33 @@
                 "ms-python.vscode-pylance",
                 "ms-azuretools.vscode-docker",
                 "saoudrizwan.claude-dev",
-                "ms-python.mypy-type-checker"
+                "matangover.mypy",
+                "charliermarsh.ruff",
+                "github.copilot",
+                "github.copilot-chat"
             ],
             "settings": {
+                // Use system Python in container, no venvs
                 "python.defaultInterpreterPath": "/usr/local/bin/python",
-                "python.terminal.activateEnvironment": false
+                "python.terminal.activateEnvironment": false,
+                // Ruff as linter/formatter
+                "editor.formatOnSave": true,
+                "python.linting.enabled": false,
+                // Pylance analysis config (loose)
+                "python.analysis.extraPaths": [
+                    "./src"
+                ],
+                "python.analysis.indexing": true,
+                "python.analysis.autoSearchPaths": true,
+                "python.analysis.diagnosticMode": "workspace",
+                "python.analysis.typeCheckingMode": "basic",
+                "python.analysis.useLibraryCodeForTypes": true,
+                // Test discovery
+                "python.testing.pytestEnabled": true,
+                "python.testing.pytestArgs": [
+                    "tests"
+                ],
+                "python.testing.unittestEnabled": false
             }
         }
     },
@@ -26,5 +48,6 @@
     "remoteUser": "root",
     "runArgs": [
         "--network=devnet"
-    ]
+    ],
+    "postCreateCommand": "uv --version && python --version && ruff --version && if [ -f /workspace/.clinerules/cline_mcp_settings.json ]; then mkdir -p /root/.vscode-server/data/User/globalStorage/saoudrizwan.claude-dev/settings && cp /workspace/.clinerules/cline_mcp_settings.json /root/.vscode-server/data/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json; fi"
 }

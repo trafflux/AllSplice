@@ -1,0 +1,29 @@
+{
+  "include": ["src", "tests"],
+  "extraPaths": ["src"],
+  "typeCheckingMode": "basic",
+  "reportMissingImports": "none",
+  "reportMissingTypeStubs": false,
+  "venvPath": ".",
+  "venv": "",
+  "pythonVersion": "3.12",
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    "venv",
+    ".venv",
+    "build",
+    "dist",
+    "docs",
+    "generated_code",
+    "*.env",
+    "*.specstory",
+    "*.mypy_cache",
+    "*.pycache__",
+    "*.pytest_cache",
+    "*.ruff_cache",
+    "*.coverage",
+    "*.coverage.*",
+    ".vscode"
+  ]
+}
