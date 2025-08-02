@@ -40,7 +40,7 @@ def build_app_with_handlers() -> FastAPI:
     async def raise_unexpected() -> dict[str, Any]:
         # This should be normalized to InternalError by the generic handler
         # Use Starlette HTTPException to ensure the route hits our global exception handler path.
-        from starlette.exceptions import HTTPException as StarletteHTTPException  # noqa: WPS433
+        from starlette.exceptions import HTTPException as StarletteHTTPException
 
         raise StarletteHTTPException(status_code=500, detail="boom")
 

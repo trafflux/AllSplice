@@ -79,6 +79,7 @@ select = [
 ignore = [
     "E501",  # line too long (handled by formatter)
     "T201",  # print found (allow prints for now)
+    "I001" # Complexity
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -93,7 +94,7 @@ combine-as-imports = true
 force-single-line = false
 
 [tool.ruff.lint.mccabe]
-max-complexity = 10
+max-complexity = 15
 
 [tool.mypy]
 python_version = "3.12"

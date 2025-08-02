@@ -1,4 +1,6 @@
 *.env
+*.env.local
+*.env.*.local
 .specstory
 .mypy_cache
 .ruff_cache
