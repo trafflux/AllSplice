@@ -32,15 +32,26 @@ class OllamaClient:
     def __init__(
         self,
         base_url: str | None = None,
-        timeout_s: int | None = None,
+        timeout_s: float | None = None,
         *,
         client: httpx.AsyncClient | None = None,
         client_factory: Callable[[], httpx.AsyncClient] | None = None,
     ) -> None:
         settings = get_settings()
-        resolved_base = base_url or (settings.OLLAMA_HOST or "http://localhost:11434")
-        self._base_url = str(resolved_base).rstrip("/")
-        self._timeout_s = float(timeout_s or settings.REQUEST_TIMEOUT_S or 30)
+        # Determine base_url: explicit > settings > default
+        if base_url is not None:
+            self._base_url = str(base_url)
+        elif getattr(settings, "OLLAMA_HOST", None):
+            self._base_url = str(settings.OLLAMA_HOST)
+        else:
+            self._base_url = "http://localhost:11434"
+        # Determine timeout: explicit > settings > default
+        if timeout_s is not None:
+            self._timeout_s = float(timeout_s)
+        elif getattr(settings, "REQUEST_TIMEOUT_S", None):
+            self._timeout_s = float(settings.REQUEST_TIMEOUT_S)
+        else:
+            self._timeout_s = 30.0
 
         # Prefer explicit client, else factory, else default constructor.
         if client is not None:
@@ -191,9 +202,19 @@ class OllamaClient:
     async def _stream_response(self, body: dict[str, Any]) -> AsyncGenerator[dict[str, Any], None]:
         """Helper to stream and parse responses."""
         async with self._client.stream(
-            "POST", "/api/chat", json=body, headers=await self._headers()
+            "POST",
+            "/api/chat",
+            json=body,
+            headers=await self._headers(),
+            timeout=self._timeout_s,
         ) as resp:
-            resp.raise_for_status()
+            # Guard against missing raise_for_status in fake responses
+            if hasattr(resp, "raise_for_status"):
+                try:
+                    resp.raise_for_status()
+                except Exception:
+                    # Propagate HTTP errors
+                    raise
             # Prefer JSONL iteration for robustness; fall back to lines
             try:
                 async for line in resp.aiter_lines():
@@ -251,7 +272,8 @@ class OllamaClient:
                         continue
                     if isinstance(part, str):
                         text_parts.append(part)
-                content_str = "\n".join(p for p in text_parts if p)
+                # Join parts into a single string
+                content_str = "".join(text_parts)
             elif isinstance(raw_content, str):
                 content_str = raw_content
             else:

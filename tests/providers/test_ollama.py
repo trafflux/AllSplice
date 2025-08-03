@@ -79,7 +79,7 @@ def provider(monkeypatch: pytest.MonkeyPatch) -> ChatProvider:
 
 def _sample_request() -> ChatCompletionRequest:
     return ChatCompletionRequest(
-        model="llama3.1:latest",
+        model="granite3.3:2b",
         messages=[
             ChatMessage(role="user", content="Hello"),
         ],
@@ -93,7 +93,7 @@ def test_success_maps_response(monkeypatch: pytest.MonkeyPatch, provider: ChatPr
     async def _mock_chat(self: OllamaClient, **kwargs: Any) -> dict[str, Any]:  # noqa: ARG001
         # kwargs may include model, messages, etc. We ignore specifics for the unit test.
         return {
-            "model": kwargs.get("model", "llama3.1:latest"),
+            "model": kwargs.get("model", "granite3.3:2b"),
             "message": {"role": "assistant", "content": "Hi there!"},
             "created_at": "2024-01-01T00:00:00Z",
             "done": True,
@@ -103,10 +103,10 @@ def test_success_maps_response(monkeypatch: pytest.MonkeyPatch, provider: ChatPr
     monkeypatch.setattr(OllamaClient, "chat", _mock_chat, raising=True)
 
     req = _sample_request()
-    resp = asyncio.get_event_loop().run_until_complete(provider.chat_completions(req))
+    resp = asyncio.run(provider.chat_completions(req))
     assert isinstance(resp, ChatCompletionResponse)
     assert resp.object == "chat.completion"
-    assert resp.model == "llama3.1:latest"
+    assert resp.model == "granite3.3:2b"
     assert resp.choices and isinstance(resp.choices[0], Choice)
     assert resp.choices[0].message.role == "assistant"
     assert "Hi there!" in resp.choices[0].message.content
@@ -131,7 +131,7 @@ def test_error_maps_to_provider_error(
 
     req = _sample_request()
     with pytest.raises(Exception) as ei:
-        asyncio.get_event_loop().run_until_complete(provider.chat_completions(req))
+        asyncio.run(provider.chat_completions(req))
     # Provider should wrap/normalize to ProviderError
     from ai_gateway.exceptions.errors import ProviderError
 
@@ -152,9 +152,7 @@ def test_timeout_maps_to_provider_error(
     # Run with a very short timeout by patching provider/client if provider enforces timeout internally
     # If provider relies on settings, shorten REQUEST_TIMEOUT_S via fixture
     with pytest.raises(Exception) as ei:
-        asyncio.get_event_loop().run_until_complete(
-            asyncio.wait_for(provider.chat_completions(req), timeout=0.01)
-        )
+        asyncio.run(asyncio.wait_for(provider.chat_completions(req), timeout=0.01))
     # Upstream timeout leads to ProviderError via handler at API layer. At unit level,
     # we can assert TimeoutError/CancelledError is raised here, and integration tests
     # ensure mapping to ProviderError via global handlers.
@@ -196,7 +194,7 @@ async def test_ollama_provider_create_embeddings_stub(provider: ChatProvider) ->
 
     # Test with string input
     req = CreateEmbeddingsRequest(
-        model="llama3.1:latest",
+        model="granite3.3:2b",
         input="Hello world",
     )
     resp = await ollama_provider.create_embeddings(req)
@@ -204,7 +202,7 @@ async def test_ollama_provider_create_embeddings_stub(provider: ChatProvider) ->
     assert resp.object == "list"
     assert isinstance(resp.data, list)
     assert len(resp.data) == 1
-    assert resp.model == "llama3.1:latest"
+    assert resp.model == "granite3.3:2b"
 
     # Check embedding item
     item = resp.data[0]

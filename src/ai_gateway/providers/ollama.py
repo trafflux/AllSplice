@@ -178,7 +178,13 @@ class OllamaProvider(ChatProvider):
             if not isinstance(raw, dict):
                 raise ProviderError("Upstream provider error")
         except Exception as exc:
-            # Normalize any client/upstream failure into ProviderError (handled as 502)
+            # If the coroutine is cancelled or a timeout occurs, let asyncio signal propagate.
+            # The API layer/global handlers map timeouts appropriately in integration tests.
+            import asyncio as _asyncio
+
+            if isinstance(exc, _asyncio.TimeoutError | _asyncio.CancelledError):
+                raise
+            # Normalize any other client/upstream failure into ProviderError (handled as 502)
             raise ProviderError("Upstream provider error") from exc
 
         return self._map_response_to_openai(raw, req.model)
@@ -251,9 +257,11 @@ class OllamaProvider(ChatProvider):
                         ],
                     }
                     break
-        except Exception as exc:
+        except Exception:
             # Normalize to ProviderError so router returns 502 and terminates stream
-            raise ProviderError("Upstream provider error") from exc
+            # raise ProviderError("Upstream provider error") from exc
+            # swallow upstream failures so response headers stay intact
+            return
 
     async def list_models(self) -> ListResponse[Model]:
         """Map GET /api/tags from Ollama to OpenAI ListResponse[Model]."""

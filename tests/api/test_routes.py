@@ -266,7 +266,7 @@ async def test_provider_list_models_and_embeddings_endpoints(
             "/ollama/v1/embeddings",
             headers=h,
             json={
-                "model": "llama3.1:latest",
+                "model": "granite3.3:2b",
                 "input": "Hello world",
             },
         )

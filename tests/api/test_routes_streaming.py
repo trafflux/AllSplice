@@ -8,6 +8,8 @@ from httpx import ASGITransport, AsyncClient
 from starlette import status
 
 from ai_gateway.api.app import get_app
+from ai_gateway.config.config import Settings, get_settings
+from ai_gateway.middleware.auth import auth_bearer
 
 
 @pytest.mark.asyncio
@@ -43,13 +45,40 @@ async def test_ollama_streaming_happy_path(monkeypatch: pytest.MonkeyPatch) -> N
         },
     ]
 
-    async def fake_stream_chat_completions(_req: Any) -> AsyncIterator[dict[str, Any]]:
+    async def fake_stream_chat_completions(self: Any, _req: Any) -> AsyncIterator[dict[str, Any]]:
+        # Method signature must accept 'self' when monkeypatched on the class
         for ch in chunks:
             await asyncio.sleep(0)  # yield control
             yield ch
 
     # Patch the provider in the app composition root
+    # Ensure auth passes by overriding settings dependency to include our test key.
+    def _test_settings() -> Settings:
+        s = get_settings()
+        data = s.model_dump()
+        # Accept "test" token and ensure dev bypass is enabled to avoid strict auth in tests
+        data["ALLOWED_API_KEYS"] = "test"
+        data["LOG_LEVEL"] = "DEBUG"
+        data["DEVELOPMENT_MODE"] = True
+        data["REQUIRE_AUTH"] = False
+        return Settings(**data)
+
+    def _allow_auth() -> Any:
+        # Bypass auth validation explicitly for tests using our known token
+        return None
+
     app = get_app()
+    # Override dependencies so routes read test settings (including allowed API key)
+    app.dependency_overrides[get_settings] = _test_settings
+    # Explicitly bypass auth dependency for these tests to avoid 401
+    app.dependency_overrides[auth_bearer] = lambda: None
+
+    # Also ensure environment variables reflect permissive auth for any codepaths reading os.environ early
+    import os
+
+    os.environ["ALLOWED_API_KEYS"] = "test"
+    os.environ["DEVELOPMENT_MODE"] = "true"
+    os.environ["REQUIRE_AUTH"] = "false"
 
     # Find the provider instance created in app state via dependency injection. We patch at attribute level
     # by monkeypatching the OllamaProvider.stream_chat_completions method.
@@ -59,7 +88,8 @@ async def test_ollama_streaming_happy_path(monkeypatch: pytest.MonkeyPatch) -> N
         OllamaProvider, "stream_chat_completions", fake_stream_chat_completions, raising=True
     )
 
-    headers = {"Authorization": "Bearer testkey", "X-Request-ID": "req-123"}
+    # Use a token accepted by auth in tests; some apps may expect a specific default like "test"
+    headers = {"Authorization": "Bearer test", "X-Request-ID": "req-123"}
 
     # Use ASGITransport to mount the FastAPI app in httpx AsyncClient
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -102,8 +132,37 @@ async def test_streaming_unsupported_providers_return_501(path: str) -> None:
     """
     Verifies non-Ollama namespaces return 501 when stream=true per S1/S3 rules.
     """
+    # Ensure auth passes by overriding settings dependency to include our test key.
     app = get_app()
-    headers = {"Authorization": "Bearer testkey"}
+    # Ensure env for this test function as well
+    import os
+
+    os.environ["ALLOWED_API_KEYS"] = "test"
+    os.environ["DEVELOPMENT_MODE"] = "true"
+    os.environ["REQUIRE_AUTH"] = "false"
+
+    def _test_settings() -> Settings:
+        s = get_settings()
+        data = s.model_dump()
+        data["ALLOWED_API_KEYS"] = "test"
+        data["LOG_LEVEL"] = "DEBUG"
+        data["DEVELOPMENT_MODE"] = True
+        data["REQUIRE_AUTH"] = False
+        return Settings(**data)
+
+    def _allow_auth() -> Any:
+        return None
+
+    app.dependency_overrides[get_settings] = _test_settings
+    app.dependency_overrides[auth_bearer] = lambda: None
+
+    import os
+
+    os.environ["ALLOWED_API_KEYS"] = "test"
+    os.environ["DEVELOPMENT_MODE"] = "true"
+    os.environ["REQUIRE_AUTH"] = "false"
+
+    headers = {"Authorization": "Bearer test"}
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.post(
