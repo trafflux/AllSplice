@@ -66,12 +66,27 @@ health_router = APIRouter()
 v1_router = APIRouter(prefix=V1_BASE)
 cerebras_router = APIRouter(prefix=CEREBRAS_BASE)
 ollama_router = APIRouter(prefix=OLLAMA_BASE)
-ollama_router = APIRouter(prefix=OLLAMA_BASE)
 
 
 @health_router.get(HEALTHZ)
-async def healthz() -> dict[str, str]:
-    return {"status": "ok"}
+async def healthz() -> dict[str, str | int]:
+    """Readiness/health endpoint. No auth required.
+
+    Returns minimal status and, if available, version/build metadata.
+    """
+    payload: dict[str, str | int] = {"status": "ok"}
+    # Best-effort: include version/build if the package exposes them.
+    import ai_gateway
+
+    version = getattr(ai_gateway, "__version__", None)
+    build = getattr(ai_gateway, "__build__", None)
+
+    if version is not None:
+        payload["version"] = str(version)
+    if build is not None:
+        # build could be a short git sha or build number
+        payload["build"] = str(build)
+    return payload
 
 
 def _mock_chat_response(model: str) -> ChatCompletionResponse:

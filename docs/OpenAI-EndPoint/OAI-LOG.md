@@ -12,14 +12,17 @@ Updating Protocol:
 - Keep dependencies explicit; when resolved, mark items accordingly.
 - Maintain concise, actionable next actions.
 
-Last Updated: 2025-08-03T00:13:41Z
+Last Updated: 2025-08-03T02:46:36Z
 
 -------------------------------------------------------------------------------
 
 High-Level Summary
 - Project mode: TDD with strict typing/linting per project standards.
-- All 12 features exist as documentation scaffolds and are currently marked Incomplete in their respective files.
-- Initial pass logs tasks and dependencies; implementation work will flip items to ✅ as code/tests/docs are added.
+- Feature 10 and authentication (06) remain complete.
+- Features 07 (Models) and 08 (Embeddings) have been implemented across providers (custom/cerebras/ollama) with OpenAI-compatible schemas and endpoints; unit and integration tests added.
+- Legacy Completions endpoint explicitly removed from scope to ensure alignment with current OpenAI API (Chat Completions, Models, Embeddings only).
+- Health/readiness endpoint GET /healthz added (no auth). Returns {"status":"ok"} and, if available, version/build info from package metadata.
+- Test suite is green with coverage ≈ 92%.
 - Ran pytest; config Settings behaviors have been stabilized. The previously failing tests are now PASSING:
   - ALLOWED_API_KEYS CSV/JSON/empty parsing via custom env source
   - LOG_LEVEL normalization and invalid value rejection
@@ -62,19 +65,19 @@ Dependencies: Global middleware, 05 routing for integration points.
 Blockers: None. Auth dependency validated by tests; configuration parsing stabilized.
 
 07 — GET /{provider}/v1/models
-Status: ❌
+Status: ✅
 Dependencies: 05 routing, 04 interface (list_models), 06 auth.
-Blockers: Missing endpoint implementation and schemas for ListModels. PRD requires strict OpenAI schema compliance. Implementation work needed in routes, provider interface, and schemas.
+Blockers: None. Implemented for /v1, /cerebras/v1, /ollama/v1 with OpenAI-compatible ListResponse[Model]. Providers return deterministic stubs and tests validate shape/auth.
 
 08 — POST /{provider}/v1/embeddings
-Status: ❌
+Status: ✅
 Dependencies: 05 routing, 04 interface (create_embeddings), 06 auth.
-Blockers: Not implemented. Requires request/response schemas and provider interface method. Must conform to OpenAI CreateEmbeddingRequest/CreateEmbeddingResponse.
+Blockers: None. Implemented for /v1, /cerebras/v1, /ollama/v1 with OpenAI-compatible CreateEmbeddingsRequest/CreateEmbeddingsResponse. Deterministic vectors and usage; tests added.
 
 09 — POST /{provider}/v1/completions (Legacy)
-Status: ❌
-Dependencies: 05 routing, 04 interface (create_completion), 06 auth.
-Blockers: Not implemented. Requires legacy Completion request/response schemas and provider mapping. Streaming stance documented as non-streaming v1; still needs endpoint + tests.
+Status: ‼️ Out of Scope (by decision)
+Dependencies: None (removed from delivery scope).
+Blockers: None. Per product direction, we will not implement legacy Completions. The service targets current OpenAI-compatible endpoints only: Models, Embeddings, and Chat Completions (non-streaming). Documentation and scope updated accordingly.
 
 10 — POST /{provider}/v1/chat/completions
 Status: ✅
@@ -129,6 +132,8 @@ Tasks:
 2. Endpoint Matrix (request/response schemas, HTTP codes) — ⚠️
 3. Non-Goals — ⚠️
 4. Cross-Cutting Concerns — ⚠️
+Notes:
+- Legacy Completions (POST /{provider}/v1/completions) is OUT OF SCOPE by decision; supported endpoints are: GET /{provider}/v1/models, POST /{provider}/v1/embeddings, POST /{provider}/v1/chat/completions.
 Blockers:
 - ⚠️ Consolidated schema references for matrix; depends on 04 and schema files.
 
@@ -240,35 +245,29 @@ Blockers:
 -------------------------------------------------------------------------------
 
 Cross-Feature Dependencies and Notes
-- 04 Provider Interface underpins 05 routing and endpoints 07–10.
+- 04 Provider Interface underpins 05 routing and endpoints 07, 08, and 10.
 - 06 Auth and security headers apply to all endpoints; ensure consistent 401 with WWW-Authenticate.
-- Non-streaming default for v1 across legacy and chat; explicit stance to be documented in 09 and 10.
+- Non-streaming default for v1 chat; streaming remains out-of-scope per PRD v1.0.
 
 -------------------------------------------------------------------------------
 
 Next Actions (Immediate)
-1) Implement Feature 07 — GET /{provider}/v1/models:
-   - Add OpenAI ListModels response schema.
-   - Add /v1/models routes under providers with auth dependency.
-   - Extend provider interface with list_models() and implement in custom/cerebras/ollama (mock/static for now).
-   - Add tests (API integration + unit) to validate schema and auth.
-2) Implement Feature 08 — POST /{provider}/v1/embeddings:
-   - Add CreateEmbeddings request/response schemas.
-   - Add /v1/embeddings routes with auth dependency.
-   - Extend provider interface with create_embeddings() and implement.
-   - Add tests ensuring strict schema mapping and error handling.
-3) Implement Feature 09 — POST /{provider}/v1/completions (Legacy):
-   - Add Completion request/response schemas (non-streaming v1).
-   - Add /v1/completions routes with auth dependency.
-   - Extend provider interface with create_completion() and implement.
-   - Tests covering happy/error paths and non-streaming enforcement.
-4) Maintain repository health:
-   - Keep pytest green and coverage ≥85% (current ≈ 91%).
-   - Run mypy; keep strict typing adherence.
+1) Add documentation/examples for GET /healthz and wire into deployment guides (readiness/liveness probes).
+2) Update documentation to reflect scope decision:
+   - Remove legacy Completions from PRD and docs where applicable.
+   - Ensure endpoint matrix only lists: GET /{ns}/v1/models, POST /{ns}/v1/embeddings, POST /{ns}/v1/chat/completions, GET /healthz.
+   - README: add curl examples for Models, Embeddings, Chat Completions, and Health.
+3) Maintain repository health:
+   - Keep pytest green, coverage ≥ 85–90% (current ≈ 92%).
+   - Run mypy strict and ruff formatting/lint checks in CI.
+4) Align remaining documentation features (01–05, 11–12) with the updated scope and finalize outstanding blockers accordingly.
 
 -------------------------------------------------------------------------------
 
 Changelog (for this log)
+- 2025-08-03 02:46:36Z: Implemented GET /healthz (no auth) with optional version/build fields; updated summary and next actions to include health endpoint.
+- 2025-08-03 02:32:43Z: Decision logged — Legacy Completions removed from scope; updated High-Level Summary, Feature 03 notes, Feature 09 status, Next Actions, and dependencies.
+- 2025-08-03 01:53:28Z: Features 07 and 08 implemented across providers with schemas, routes, and tests; coverage ≈ 92%; updated statuses to ✅ and adjusted next actions towards Feature 09.
 - 2025-08-03 00:13:41Z: Updated feature statuses per PRD: Feature 10 marked Complete (implemented and tested); Features 07–09 marked as Not Implemented (❌) and queued with concrete next steps.
 - 2025-08-02 23:57:54Z: FEATURE 06 COMPLETE — Auth dependency behavior validated; updated status and next actions. Maintained ≥85% coverage target with full suite at ≈91%.
 - 2025-08-02 23:50:38Z: CONFIG STABILIZED — All config tests pass. Introduced pytest-aware dotenv disabling; ensured ALLOWED_API_KEYS parsing via custom source; validators enforced. Proceeding to full-suite tests and type checks.

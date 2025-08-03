@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Generic, Literal, TypeVar
+from typing import Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -91,7 +91,7 @@ class Model(BaseModel):
         return v
 
 
-class ListResponse(BaseModel, Generic[T]):
+class ListResponse[T](BaseModel):
     """OpenAI-compatible list wrapper."""
 
     model_config = ConfigDict(extra="forbid")
