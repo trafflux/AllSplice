@@ -12,6 +12,15 @@ from ai_gateway.schemas.openai_chat import (
     Choice,
     Usage,
 )
+from ai_gateway.schemas.openai_embeddings import (
+    CreateEmbeddingsRequest,
+    CreateEmbeddingsResponse,
+    EmbeddingItem,
+    EmbeddingUsage,
+    deterministic_vector,
+    normalize_input_to_strings,
+)
+from ai_gateway.schemas.openai_models import ListResponse, Model, ModelPermission
 
 
 class CustomProcessingProvider:
@@ -66,6 +75,57 @@ class CustomProcessingProvider:
         )
 
         return resp
+
+    async def list_models(self) -> ListResponse[Model]:
+        """Return a deterministic list of models with permissions."""
+        now = int(time.time())
+        perm = ModelPermission(
+            id=f"perm-{uuid.uuid4().hex}",
+            created=now,
+            allow_create_engine=False,
+            allow_sampling=True,
+            allow_logprobs=False,
+            allow_search_indices=False,
+            allow_view=True,
+            allow_fine_tuning=False,
+            organization=None,
+            group=None,
+            is_blocking=False,
+        )
+        models = [
+            Model(
+                id="custom-mini",
+                created=now,
+                owned_by="ai_gateway",
+                permission=[perm],
+                root=None,
+                parent=None,
+            ),
+            Model(
+                id="custom-pro",
+                created=now,
+                owned_by="ai_gateway",
+                permission=[perm],
+                root=None,
+                parent=None,
+            ),
+        ]
+        return ListResponse[Model](data=models)
+
+    async def create_embeddings(self, req: CreateEmbeddingsRequest) -> CreateEmbeddingsResponse:
+        """Create deterministic float embeddings using a hash-based generator."""
+        # Normalize inputs into strings
+        items = normalize_input_to_strings(req.input)
+        vectors: list[EmbeddingItem] = []
+        for idx, text in enumerate(items):
+            vec = deterministic_vector(text, dim=16)
+            vectors.append(EmbeddingItem(embedding=vec, index=idx))
+
+        # Simple deterministic usage accounting: tokens ~ whitespace-separated terms per item
+        prompt_tokens = sum(len(s.split()) for s in items)
+        usage = EmbeddingUsage(prompt_tokens=prompt_tokens, total_tokens=prompt_tokens)
+
+        return CreateEmbeddingsResponse(object="list", data=vectors, model=req.model, usage=usage)
 
 
 def _log_info(event: str, fields: dict[str, Any]) -> None:

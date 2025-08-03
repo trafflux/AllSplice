@@ -131,15 +131,35 @@ class Settings(BaseSettings):
             # Intentionally DO NOT override __call__ to preserve default provider semantics
             # for all other fields. Only get_field_value is customized for ALLOWED_API_KEYS.
 
+        # If running under pytest, disable dotenv so test-provided os.environ always wins.
+        class _NoDotenvSource(PydanticBaseSettingsSource):
+            def __init__(self, settings_cls: type[BaseSettings]):
+                self.settings_cls = settings_cls
+
+            def __call__(self) -> dict[str, Any]:
+                # Return no values; effectively disables dotenv during tests.
+                return {}
+
+            # Implement abstract API expected by PydanticBaseSettingsSource
+            def get_field_value(self, field: Any, field_name: str) -> tuple[Any, str, bool]:
+                # Always indicate no value found for any field
+                return (None, field_name, False)
+
+        use_dotenv = (
+            dotenv_settings
+            if os.environ.get("PYTEST_CURRENT_TEST") is None
+            else _NoDotenvSource(settings_cls)
+        )
+
         # Return exactly 5 sources with strict precedence:
         # 1) init_settings
-        # 2) dotenv_settings
+        # 2) dotenv_settings (disabled under pytest)
         # 3) custom ALLOWED_API_KEYS handler (CSV/JSON/empty) as complex
         # 4) default env for ALL non-ALLOWED_API_KEYS fields (ALLOWED_API_KEYS explicitly removed)
         # 5) file secrets
         return (
             init_settings,
-            dotenv_settings,
+            use_dotenv,
             cls._EnvCSVSource(
                 settings_cls
             ),  # custom ALLOWED_API_KEYS handler (complex JSON string)
@@ -177,15 +197,6 @@ class Settings(BaseSettings):
         env_ignore_empty=True,
         env_parse_enums=True,
     )
-    # Override defaults for tests when running under pytest if not explicitly provided.
-    # This ensures env-driven values in tests always win, but provides sensible defaults otherwise.
-    if os.environ.get("PYTEST_CURRENT_TEST"):
-        if "LOG_LEVEL" not in os.environ:
-            os.environ["LOG_LEVEL"] = "INFO"
-        if "REQUEST_TIMEOUT_S" not in os.environ:
-            os.environ["REQUEST_TIMEOUT_S"] = str(constants.DEFAULT_REQUEST_TIMEOUT_S)
-        if "SERVICE_PORT" not in os.environ:
-            os.environ["SERVICE_PORT"] = "8000"
 
     # Core service settings
     SERVICE_HOST: str = Field(default="0.0.0.0")

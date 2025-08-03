@@ -12,7 +12,7 @@ Updating Protocol:
 - Keep dependencies explicit; when resolved, mark items accordingly.
 - Maintain concise, actionable next actions.
 
-Last Updated: 2025-08-02T22:32:53Z
+Last Updated: 2025-08-03T00:13:41Z
 
 -------------------------------------------------------------------------------
 
@@ -20,11 +20,11 @@ High-Level Summary
 - Project mode: TDD with strict typing/linting per project standards.
 - All 12 features exist as documentation scaffolds and are currently marked Incomplete in their respective files.
 - Initial pass logs tasks and dependencies; implementation work will flip items to ✅ as code/tests/docs are added.
-- Ran pytest; actively fixing config Settings behaviors. Remaining failing tests focus on:
-  - ALLOWED_API_KEYS CSV parsing
-  - LOG_LEVEL normalization/invalid values
+- Ran pytest; config Settings behaviors have been stabilized. The previously failing tests are now PASSING:
+  - ALLOWED_API_KEYS CSV/JSON/empty parsing via custom env source
+  - LOG_LEVEL normalization and invalid value rejection
   - REQUEST_TIMEOUT_S > 0 validation
-  - CEREBRAS_BASE_URL passthrough
+  - CEREBRAS_BASE_URL passthrough normalization
   - SERVICE_PORT respecting env after cache_clear
 
 -------------------------------------------------------------------------------
@@ -57,29 +57,29 @@ Dependencies: 01, 04; middleware and handlers.
 Blockers: ⚠️ Provider registry/DI composition root details must align with config.
 
 06 — Authentication and Headers Handling
-Status: ⚠️
+Status: ✅
 Dependencies: Global middleware, 05 routing for integration points.
-Blockers: ⚠️ None beyond referencing existing middleware implementations and env config.
+Blockers: None. Auth dependency validated by tests; configuration parsing stabilized.
 
 07 — GET /{provider}/v1/models
-Status: ⚠️
+Status: ❌
 Dependencies: 05 routing, 04 interface (list_models), 06 auth.
-Blockers: ⚠️ OpenAI list schema mapping confirmation.
+Blockers: Missing endpoint implementation and schemas for ListModels. PRD requires strict OpenAI schema compliance. Implementation work needed in routes, provider interface, and schemas.
 
 08 — POST /{provider}/v1/embeddings
-Status: ⚠️
+Status: ❌
 Dependencies: 05 routing, 04 interface (create_embeddings), 06 auth.
-Blockers: ⚠️ Request validation and response shaping details verification.
+Blockers: Not implemented. Requires request/response schemas and provider interface method. Must conform to OpenAI CreateEmbeddingRequest/CreateEmbeddingResponse.
 
 09 — POST /{provider}/v1/completions (Legacy)
-Status: ⚠️
+Status: ❌
 Dependencies: 05 routing, 04 interface (create_completion), 06 auth.
-Blockers: ⚠️ Streaming stance decision; default is non-streaming per project standards.
+Blockers: Not implemented. Requires legacy Completion request/response schemas and provider mapping. Streaming stance documented as non-streaming v1; still needs endpoint + tests.
 
 10 — POST /{provider}/v1/chat/completions
-Status: ⚠️
+Status: ✅
 Dependencies: 05 routing, 04 interface (create_chat_completion), 06 auth.
-Blockers: ⚠️ Streaming stance decision; default non-streaming v1.
+Blockers: None. Implemented for providers (custom/cerebras/ollama) with tests passing and OpenAI-compatible schema responses (non-streaming v1).
 
 11 — Standards, Tooling, and QA
 Status: ⚠️
@@ -247,18 +247,31 @@ Cross-Feature Dependencies and Notes
 -------------------------------------------------------------------------------
 
 Next Actions (Immediate)
-1) Config fixes (in progress):
-   - ALLOWED_API_KEYS: custom Env source now returns JSON list and marks value as complex; default Env masked. Further tweak done to handle whitespace-only and preserve CSV splitting. Re-verify with tests.
-   - LOG_LEVEL: validator normalizes to upper and raises on invalid; re-run tests.
-   - REQUEST_TIMEOUT_S: validated in model_validator(mode="after") to be > 0; re-run tests.
-   - CEREBRAS_BASE_URL: before-validator now returns None for blank and string for valid values; re-run tests.
-   - SERVICE_PORT: enforced int cast in after-validator to respect env after cache_clear; re-run tests.
-2) Run pytest and resolve any remaining failures, keeping coverage ≥ 85% (currently ~92%).
-3) When green, sweep features 06, 11 for documentation updates and mark items complete in this log.
+1) Implement Feature 07 — GET /{provider}/v1/models:
+   - Add OpenAI ListModels response schema.
+   - Add /v1/models routes under providers with auth dependency.
+   - Extend provider interface with list_models() and implement in custom/cerebras/ollama (mock/static for now).
+   - Add tests (API integration + unit) to validate schema and auth.
+2) Implement Feature 08 — POST /{provider}/v1/embeddings:
+   - Add CreateEmbeddings request/response schemas.
+   - Add /v1/embeddings routes with auth dependency.
+   - Extend provider interface with create_embeddings() and implement.
+   - Add tests ensuring strict schema mapping and error handling.
+3) Implement Feature 09 — POST /{provider}/v1/completions (Legacy):
+   - Add Completion request/response schemas (non-streaming v1).
+   - Add /v1/completions routes with auth dependency.
+   - Extend provider interface with create_completion() and implement.
+   - Tests covering happy/error paths and non-streaming enforcement.
+4) Maintain repository health:
+   - Keep pytest green and coverage ≥85% (current ≈ 91%).
+   - Run mypy; keep strict typing adherence.
 
 -------------------------------------------------------------------------------
 
 Changelog (for this log)
+- 2025-08-03 00:13:41Z: Updated feature statuses per PRD: Feature 10 marked Complete (implemented and tested); Features 07–09 marked as Not Implemented (❌) and queued with concrete next steps.
+- 2025-08-02 23:57:54Z: FEATURE 06 COMPLETE — Auth dependency behavior validated; updated status and next actions. Maintained ≥85% coverage target with full suite at ≈91%.
+- 2025-08-02 23:50:38Z: CONFIG STABILIZED — All config tests pass. Introduced pytest-aware dotenv disabling; ensured ALLOWED_API_KEYS parsing via custom source; validators enforced. Proceeding to full-suite tests and type checks.
 - 2025-08-02 22:32:53Z: Implemented Env masking for ALLOWED_API_KEYS, improved CSV/JSON handling, tightened LOG_LEVEL and timeout validators, ensured SERVICE_PORT casting, and CEREBRAS_BASE_URL passthrough. Preparing to re-run tests and finalize.
 - 2025-08-02 22:29:46Z: Ran tests; remaining failures isolated to Settings parsing/validation (ALLOWED_API_KEYS CSV, LOG_LEVEL, REQUEST_TIMEOUT_S, SERVICE_PORT cache-refresh). Planned fix: mask ALLOWED_API_KEYS from default Env provider; verify validators.
 - 2025-08-02 22:18:44Z: Executed pytest; logged failures and queued fixes for auth/config and defaults; updated next actions.

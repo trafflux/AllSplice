@@ -1,8 +1,12 @@
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Protocol, TypeVar
 
 from ai_gateway.schemas.openai_chat import ChatCompletionRequest, ChatCompletionResponse
+from ai_gateway.schemas.openai_embeddings import CreateEmbeddingsRequest, CreateEmbeddingsResponse
+from ai_gateway.schemas.openai_models import ListResponse, Model
+
+T = TypeVar("T")
 
 
 class ChatProvider(Protocol):
@@ -21,4 +25,12 @@ class ChatProvider(Protocol):
         Returns:
             OpenAI-compatible chat completion response.
         """
+        ...
+
+    async def list_models(self) -> ListResponse[Model]:
+        """List models available for this provider."""
+        ...
+
+    async def create_embeddings(self, req: CreateEmbeddingsRequest) -> CreateEmbeddingsResponse:
+        """Create embeddings for the given input."""
         ...

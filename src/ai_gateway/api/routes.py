@@ -23,6 +23,8 @@ from ai_gateway.schemas.openai_chat import (
     Choice,
     Usage,
 )
+from ai_gateway.schemas.openai_embeddings import CreateEmbeddingsRequest, CreateEmbeddingsResponse
+from ai_gateway.schemas.openai_models import ListResponse, Model
 
 # Module-level provider instances for dependency injection
 _default_custom_provider: CustomProcessingProvider | None = None
@@ -64,6 +66,7 @@ health_router = APIRouter()
 v1_router = APIRouter(prefix=V1_BASE)
 cerebras_router = APIRouter(prefix=CEREBRAS_BASE)
 ollama_router = APIRouter(prefix=OLLAMA_BASE)
+ollama_router = APIRouter(prefix=OLLAMA_BASE)
 
 
 @health_router.get(HEALTHZ)
@@ -101,6 +104,23 @@ async def chat_completions_v1(
     return await provider.chat_completions(req)
 
 
+@v1_router.get("/models")
+async def list_models_v1(
+    token: str = Depends(auth_bearer),
+    provider: CustomProcessingProvider = _custom_provider_dep,
+) -> ListResponse[Model]:
+    return await provider.list_models()
+
+
+@v1_router.post("/embeddings")
+async def create_embeddings_v1(
+    req: CreateEmbeddingsRequest,
+    token: str = Depends(auth_bearer),
+    provider: CustomProcessingProvider = _custom_provider_dep,
+) -> CreateEmbeddingsResponse:
+    return await provider.create_embeddings(req)
+
+
 @cerebras_router.post("/chat/completions")
 async def chat_completions_cerebras(
     req: ChatCompletionRequest,
@@ -114,6 +134,29 @@ async def chat_completions_cerebras(
         raise exc
 
 
+@cerebras_router.get("/models")
+async def list_models_cerebras(
+    token: str = Depends(auth_bearer),
+    provider: CerebrasProvider = _cerebras_provider_dep,
+) -> ListResponse[Model]:
+    try:
+        return await provider.list_models()
+    except ProviderError as exc:
+        raise exc
+
+
+@cerebras_router.post("/embeddings")
+async def create_embeddings_cerebras(
+    req: CreateEmbeddingsRequest,
+    token: str = Depends(auth_bearer),
+    provider: CerebrasProvider = _cerebras_provider_dep,
+) -> CreateEmbeddingsResponse:
+    try:
+        return await provider.create_embeddings(req)
+    except ProviderError as exc:
+        raise exc
+
+
 @ollama_router.post("/chat/completions")
 async def chat_completions_ollama(
     req: ChatCompletionRequest,
@@ -124,4 +167,27 @@ async def chat_completions_ollama(
         return await provider.chat_completions(req)
     except ProviderError as exc:
         # Re-raise to be handled by global exception handlers as 502 with standardized payload
+        raise exc
+
+
+@ollama_router.get("/models")
+async def list_models_ollama(
+    token: str = Depends(auth_bearer),
+    provider: OllamaProvider = _ollama_provider_dep,
+) -> ListResponse[Model]:
+    try:
+        return await provider.list_models()
+    except ProviderError as exc:
+        raise exc
+
+
+@ollama_router.post("/embeddings")
+async def create_embeddings_ollama(
+    req: CreateEmbeddingsRequest,
+    token: str = Depends(auth_bearer),
+    provider: OllamaProvider = _ollama_provider_dep,
+) -> CreateEmbeddingsResponse:
+    try:
+        return await provider.create_embeddings(req)
+    except ProviderError as exc:
         raise exc

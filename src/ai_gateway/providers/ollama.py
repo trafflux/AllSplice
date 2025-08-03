@@ -14,6 +14,15 @@ from ai_gateway.schemas.openai_chat import (
     Choice,
     Usage,
 )
+from ai_gateway.schemas.openai_embeddings import (
+    CreateEmbeddingsRequest,
+    CreateEmbeddingsResponse,
+    EmbeddingItem,
+    EmbeddingUsage,
+    deterministic_vector,
+    normalize_input_to_strings,
+)
+from ai_gateway.schemas.openai_models import ListResponse, Model, ModelPermission
 
 
 def _now_epoch() -> int:
@@ -69,3 +78,50 @@ class OllamaProvider(ChatProvider):
             choices=[choice],
             usage=usage,
         )
+
+    async def list_models(self) -> ListResponse[Model]:
+        """Return deterministic Ollama models."""
+        now = int(time.time())
+        perm = ModelPermission(
+            id=f"perm-{uuid.uuid4().hex}",
+            created=now,
+            allow_create_engine=False,
+            allow_sampling=True,
+            allow_logprobs=False,
+            allow_search_indices=False,
+            allow_view=True,
+            allow_fine_tuning=False,
+            organization=None,
+            group=None,
+            is_blocking=False,
+        )
+        models = [
+            Model(
+                id="ollama-tiny",
+                created=now,
+                owned_by="ollama",
+                permission=[perm],
+                root=None,
+                parent=None,
+            ),
+            Model(
+                id="ollama-medium",
+                created=now,
+                owned_by="ollama",
+                permission=[perm],
+                root=None,
+                parent=None,
+            ),
+        ]
+        return ListResponse[Model](data=models)
+
+    async def create_embeddings(self, req: CreateEmbeddingsRequest) -> CreateEmbeddingsResponse:
+        """Create deterministic embeddings (local stub)."""
+        items = normalize_input_to_strings(req.input)
+        data: list[EmbeddingItem] = []
+        for idx, text in enumerate(items):
+            vec = deterministic_vector(text, dim=16)
+            data.append(EmbeddingItem(embedding=vec, index=idx))
+        prompt_tokens = sum(len(s.split()) for s in items)
+        usage = EmbeddingUsage(prompt_tokens=prompt_tokens, total_tokens=prompt_tokens)
+        return CreateEmbeddingsResponse(object="list", data=data, model=req.model, usage=usage)
