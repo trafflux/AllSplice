@@ -40,13 +40,17 @@ def _patch_settings(monkeypatch: pytest.MonkeyPatch) -> None:
             REQUEST_TIMEOUT_S=1,
         )
 
+    # Ensure subsequent calls use our fake and any cache is cleared
     monkeypatch.setattr("ai_gateway.config.config.get_settings", fake_settings, raising=True)
+    if hasattr(get_settings, "cache_clear"):
+        with contextlib.suppress(Exception):
+            get_settings.cache_clear()
 
 
 @pytest.fixture()
 def provider(monkeypatch: pytest.MonkeyPatch) -> ChatProvider:
     # Ensure OllamaClient constructed inside provider sees relaxed settings
-    from ai_gateway.config.config import Settings
+    from ai_gateway.config.config import Settings, get_settings
 
     def fake_settings() -> Settings:
         return Settings(
@@ -60,6 +64,15 @@ def provider(monkeypatch: pytest.MonkeyPatch) -> ChatProvider:
 
     # Patch before provider initialization so OllamaClient() uses it
     monkeypatch.setattr("ai_gateway.config.config.get_settings", fake_settings, raising=True)
+    # Clear cached settings to pick up fake immediately
+    if hasattr(get_settings, "cache_clear"):
+        with contextlib.suppress(Exception):
+            get_settings.cache_clear()
+
+    # Also ensure module-level import sites resolve to the patched function
+    import ai_gateway.config.config as cfg  # noqa: WPS433 (tests)
+
+    monkeypatch.setattr(cfg, "get_settings", fake_settings, raising=True)
 
     return OllamaProvider()
 

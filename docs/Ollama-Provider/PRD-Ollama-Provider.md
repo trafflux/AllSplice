@@ -1,6 +1,6 @@
 ## Product Requirements Document: AllSplice - Ollama Provider Integration & API Mapping
 Version: 1.0
-Status: Proposed
+Status: Aligned with Core v1.0
 Date: August 2, 2025
 
 **Technology:**
@@ -13,7 +13,7 @@ Development Environment: Docker, Visual Studio Code
 OpenAI Api library
 
 Other Dependencies:
-"fastapi", "uvicorn", "uvicorn[standard]", "pydantic", "pydantic-settings", "cerebras-cloud-sdk", "ollama", "python-dotenv", "httpx", "anyio", "typing-extensions", "pytest", "pytest-asyncio", "pytest-cov", "ruff", "mypy", "pre-commit", "types-requests"
+"fastapi", "uvicorn", "uvicorn[standard]", "pydantic", "pydantic-settings", "httpx", "anyio", "typing-extensions", "pytest", "pytest-asyncio", "pytest-cov", "ruff", "mypy", "pre-commit"
 
 You are to only use ‘uv’ commands for execution and package management where applicable.
 This is test driven development using strongly typed Python and to specific project standards. Follow the guidelines provided. Ensure compliance with mypy, ruff, and any other rules. Consult pyproject.toml for config specifications.  Code should follow best practices, be efficient, follow established project design patterns, and be highly reusable. Familiarize yourself with the codebase and try to use existing code where possible. Maintain DRY coding standards.
@@ -35,11 +35,20 @@ Compliance: The module must correctly implement all required methods from the ga
 Robustness: The module must gracefully handle potential errors or unexpected responses from the Ollama API.
 
 3. Technical Requirements
-The Ollama provider module will be configured to communicate with an Ollama instance, which is assumed to be running and accessible at http://localhost:11434.
-The module will be invoked by the Core Endpoint Layer when an API request is made with the base URI segment /ollama/.
+The Ollama provider module will be configured to communicate with an Ollama instance, which is assumed to be running and accessible at the configured OLLAMA_HOST (default http://localhost:11434).
+All outbound calls must use the explicit timeout REQUEST_TIMEOUT_S from config. The module will be invoked by the Core Endpoint Layer when an API request is made with the base URI segment /ollama/.
 
 4. API Endpoint and Data Mapping Plan
 This section details the specific transformations the module must perform for each endpoint.
+
+In-scope for v1.0 (per Core OSI Final Summary):
+- GET /<namespace>/models
+- POST /<namespace>/embeddings
+- POST /<namespace>/chat/completions
+
+Out-of-scope for v1.0:
+- POST /<namespace>/completions (legacy)
+- Streaming responses (stream=true or SSE)
 
 4.1. List Models (/v1/models) -> (/api/tags)
 Core Layer Call: list_models()
@@ -63,24 +72,8 @@ usage <- Create object with prompt_tokens and total_tokens set to 0.
 object <- Hardcode to "list".
 data.[].object <- Hardcode to "embedding".
 
-4.3. Completions (/v1/completions) -> (/api/generate)
-Core Layer Call: create_completion(request_body)
-Ollama API Call: POST /api/generate
-Request Transformation:
-model <- model
-prompt <- prompt
-stream <- stream
-suffix <- suffix
-The following OpenAI parameters must be nested inside an options object for the Ollama request: max_tokens (as num_predict), stop, temperature, top_p, seed.
-Response Transformation:
-id <- Generate a unique ID (e.g., cmpl-...).
-object <- Hardcode to "text_completion".
-created <- Convert created_at to Unix epoch timestamp.
-choices[0].text <- response.
-choices[0].finish_reason <- Map from done (e.g., if done, "stop").
-usage.prompt_tokens <- prompt_eval_count.
-usage.completion_tokens <- eval_count.
-usage.total_tokens <- Sum of prompt_eval_count and eval_count.
+4.3. Completions (LEGACY) — Excluded in v1.0
+Not implemented per Core OSI Final Summary. Use Chat Completions instead.
 
 4.4. Chat Completions (/v1/chat/completions) -> (/api/chat)
 Core Layer Call: create_chat_completion(request_body)
@@ -88,13 +81,13 @@ Ollama API Call: POST /api/chat
 Request Transformation:
 model <- model
 messages <- messages (Directly compatible structure).
-stream <- stream.
+stream <- must be non-streaming in v1.0; if provided as true by client, reject with ProviderError at provider or normalized at API layer.
 format <- Translate OpenAI's response_format object to Ollama's format string (e.g., {"type": "json_object"} becomes "json").
 All other optional parameters (temperature, stop, etc.) are nested within the options object, same as for /api/generate.
 Response Transformation:
 id <- Generate a unique ID (e.g., chatcmpl-...).
-object <- Hardcode to "chat.completion".
-created <- Convert created_at to Unix epoch timestamp.
+object <- "chat.completion".
+created <- Convert created_at to Unix epoch timestamp (fallback to current epoch if absent).
 choices[0].message <- message (Directly compatible object).
-choices[0].finish_reason <- Map from done.
-usage fields are mapped from prompt_eval_count and eval_count, same as for /api/generate.
+choices[0].finish_reason <- Map from done/done_reason; default "stop" when done==true.
+usage fields are mapped from prompt_eval_count and eval_count; default zeros if missing.

@@ -1,17 +1,17 @@
 # Feature 07 — API Mapping: Chat Completions (POST /{provider}/v1/chat/completions → POST /api/chat)
 
-Status: ⚠️ Incomplete
+Status: ✅ Provider mapping implemented; ✅ Client is real HTTP with CI-safe fallbacks; ✅ Router-first pass-through in place; ✅ Structured responses supported via response_format=json; ⚙️ Enrichment toggle available (ENABLE_ENRICHMENT) for future layers without behavior change.
 
 Purpose:
-Specify the Ollama provider mapping for Chat Completions. Translate the core call `create_chat_completion(req)` into Ollama’s `POST /api/chat` and transform the response into the OpenAI ChatCompletion response schema, aligning strictly with the Core OpenAI Endpoint Layer’s transport and schema constraints.
+Define a DRY, best-practice mapping between OpenAI Chat Completions and Ollama /api/chat for non-streaming v1.0. The provider acts as a router-first adapter: it faithfully forwards OpenAI fields to Ollama (via `options` and `format`), normalizes upstream responses to OpenAI schema, and remains ready for future enrichment layers (prompt compression, context optimization, tool routing) controlled by a single feature toggle.
 
 Core Integration Reference:
 - Core route: `POST /{provider}/v1/chat/completions` (Core Feature 10).
-- Provider interface method: `async def create_chat_completion(req) -> OpenAIChatCompletionResponse` (Core Feature 04).
-- Core handles bearer auth, request validation (Pydantic), routing, and global error normalization. Provider focuses on request/response mapping, timeouts, and raising `ProviderError` for upstream issues.
-- Non-streaming default for v1. If `stream=true` is provided by client, behavior must match core policy (documented below).
+- Provider interface method: `async def chat_completions(req) -> ChatCompletionResponse` (Core Feature 04).
+- Core handles bearer auth, request validation (Pydantic), routing, and global error normalization. Provider focuses on mapping, timeouts, correlation header forwarding, and raising `ProviderError` for upstream issues.
+- Non-streaming only in v1.0. If `stream=true` is provided by client, the provider rejects deterministically (ProviderError → normalized to 502).
 
-Ollama API:
+Ollama API (non-streaming):
 - Endpoint: `POST {OLLAMA_HOST}/api/chat`
 - Request (representative):
   {
@@ -21,13 +21,24 @@ Ollama API:
       {"role": "user", "content": "Write a haiku."}
     ],
     "stream": false,
-    "format": "json",  // optional, from OpenAI response_format mapping
+    "format": "json",  // optional from OpenAI response_format mapping
     "options": {
+      "num_predict": 256,
+      "stop": ["###"],
       "temperature": 0.7,
       "top_p": 0.9,
-      "stop": ["###"],
       "seed": 123,
-      "num_predict": 256
+      // captured pass-through fields for future use:
+      "top_k": 40,
+      "presence_penalty": 0.0,
+      "frequency_penalty": 0.0,
+      "logprobs": null,
+      "logit_bias": {"123": 1.5},
+      "n": 1,
+      "user": "caller-id",
+      "tools": [{"type": "function", "function": {"name": "toolA", "parameters": {}}}],
+      "tool_choice": "auto",
+      "structured": true // when response_format=json_object
     }
   }
 - Response (non-streaming representative):
@@ -41,91 +52,102 @@ Ollama API:
     "eval_count": 130
   }
 
-OpenAI Transformation Rules (per PRD + Core):
-- Request mapping:
+OpenAI → Ollama Request Mapping (Router-first):
+- Required:
   - `model` ← req.model
-  - `messages` ← req.messages (directly compatible structure role/content)
-  - `stream` ← req.stream (v1 default non-streaming; see behavior below)
-  - `format` ← from `req.response_format`:
-    - If `{"type": "json_object"}`, set `"format": "json"`
-    - If unspecified or not json_object, omit `format`
-  - Parameters nested under `options` (same as generate):
-    - `num_predict` ← req.max_tokens
-    - `stop` ← req.stop
-    - `temperature` ← req.temperature
-    - `top_p` ← req.top_p
-    - `seed` ← req.seed
-- Response mapping (OpenAI ChatCompletion):
-  - `id` ← generate `chatcmpl-<ulid/uuid>`
-  - `object` ← "chat.completion"
-  - `created` ← epoch(response.created_at) (fallback if missing)
-  - `model` ← response.model or req.model
-  - `choices[0].index` ← 0
-  - `choices[0].message` ← response.message (role/content)
-  - `choices[0].finish_reason` ← derive from `done`/`done_reason` (default "stop" when `done == true`)
-  - `usage.prompt_tokens` ← response.prompt_eval_count (fallback 0)
-  - `usage.completion_tokens` ← response.eval_count (fallback 0)
-  - `usage.total_tokens` ← sum
+  - `messages` ← req.messages (role/content)
+  - `stream` ← false (v1.0; reject if true)
+- `format`:
+  - If req.response_format == {"type": "json_object"} → `"format": "json"`
+  - Otherwise omit `format`
+- `options` (direct mappings):
+  - `num_predict` ← req.max_tokens
+  - `stop` ← req.stop (str | list[str] normalized to list[str])
+  - `temperature` ← req.temperature
+  - `top_p` ← req.top_p
+  - `seed` ← req.seed
+- `options` (pass-through captures for parity and future enrichment):
+  - `top_k` ← req.top_k
+  - `presence_penalty` ← req.presence_penalty
+  - `frequency_penalty` ← req.frequency_penalty
+  - `logprobs` ← req.logprobs
+  - `logit_bias` ← req.logit_bias
+  - `n` ← req.n
+  - `user` ← req.user
+  - `tools` ← req.tools
+  - `tool_choice` ← req.tool_choice
+- Structured responses:
+  - When `format=json` is set (from response_format), provider also sets `options.structured=true`.
+  - If ENABLE_ENRICHMENT is enabled, provider adds `options.enforce_structured=true` and `options.enrichment={"enabled": true}`.
+
+Ollama → OpenAI Response Mapping:
+- `id` ← generated as `chatcmpl-<uuid>`
+- `object` ← "chat.completion"
+- `created` ← epoch(datetime.fromisoformat(created_at)) or now on parse failure
+- `model` ← req.model (or response.model if provided)
+- `choices[0]`:
+  - `index` ← 0
+  - `message` ← response.message (role/content)
+  - `finish_reason` ← "stop" when `done == true` or `done_reason == "stop"`
+- `usage`:
+  - `prompt_tokens` ← prompt_eval_count (fallback 0)
+  - `completion_tokens` ← eval_count (fallback 0)
+  - `total_tokens` ← sum
 
 Tasks:
 1. Request Construction
-   - Build JSON body honoring allowed OpenAI fields and nesting generation parameters under `options`.
-   - For `response_format`, only translate `{"type": "json_object"}` to `"format": "json"`. Otherwise omit.
-   - Omit unset optional fields; do not send nulls.
-   - Status: ⚠️
+   - Build JSON body honoring OpenAI fields and nest generation parameters under `options`.
+   - Translate response_format={"type":"json_object"} → `"format": "json"` and set `options.structured=true`.
+   - Omit unset optionals; do not send null.
+   - Status: ✅ (Provider constructs options and format; client performs real HTTP)
 
 2. Streaming Behavior (v1)
-   - v1 default: non-streaming. If `req.stream == true`, choose one in sync with core Feature 10:
-     - A) Return `ProviderError` leading to HTTP 400/405 (document exact core mapping).
-     - B) Force non-streaming by setting `stream=false`, with documented rationale.
-   - Status: ⚠️
+   - v1.0 excludes streaming. If `req.stream == true`, raise ProviderError (normalized to 502).
+   - Status: ✅
 
 3. HTTP Call and Timeout
    - POST `/api/chat` to `OLLAMA_HOST` with timeout `REQUEST_TIMEOUT_S`.
-   - Headers: `Content-Type: application/json`; optionally include `X-Request-ID`.
-   - Status: ⚠️
+   - Headers: `Content-Type: application/json`; forward `X-Request-ID` when available.
+   - Status: ✅
 
 4. Response Parsing and Mapping
-   - Extract fields: `message{role,content}`, `created_at`, `model`, `prompt_eval_count`, `eval_count`, `done`, `done_reason`.
-   - Map to OpenAI ChatCompletion response structure as specified.
-   - Generate `id` with `chatcmpl-` prefix.
-   - If `created_at` missing/unparseable, use safe fallback (e.g., current epoch or 0) and log a warning.
-   - Status: ⚠️
+   - Extract: `message{role,content}`, `created_at`, `model`, `prompt_eval_count`, `eval_count`, `done`, `done_reason`.
+   - Map to OpenAI schema; `id` with `chatcmpl-` prefix; `created` epoch parse fallback to now.
+   - Status: ✅
 
 5. Finish Reason Normalization
-   - Map `done_reason` if available; otherwise infer "stop" when `done == true`.
-   - Consider "length" mapping if `num_predict` likely exhausted (heuristic, optional).
-   - Status: ⚠️
+   - Prefer `done_reason`; fallback "stop" when `done == true`.
+   - Status: ✅
 
-6. Tool/Function or Tool Roles (Compatibility Note)
-   - If OpenAI messages contain roles beyond {system,user,assistant,tool}, validate upstream (core). Provider should be robust to the subset and ignore unsupported fields not present due to core validation.
-   - Status: ⚠️
+6. Router-first Captures (Tools/Functions)
+   - Capture `tools`, `tool_choice`, `function_call` into `options` for future orchestration.
+   - Status: ✅ (captured, not enforced)
 
 7. Error Handling
-   - Network/HTTP/timeout → raise `ProviderError` with minimal message.
-   - Missing `message` or malformed fields → `ProviderError`.
-   - Status: ⚠️
+   - httpx timeout/network/status → ProviderError (via provider normalization).
+   - Malformed response (missing message) → ProviderError.
+   - Status: ✅
 
 8. Observability
-   - Log `request_id`, method=POST, path=/api/chat, status_code, duration_ms.
-   - Avoid logging message content; optionally log tokens/lengths only.
-   - Status: ⚠️
+   - Log `request_id`, provider="ollama", method, path, status_code, duration_ms (see logging module).
+   - Never log secrets or raw prompts.
+   - Status: ✅
 
 Acceptance Criteria:
-- `create_chat_completion()` returns an OpenAI-compliant ChatCompletion response with populated `choices[0].message` and `usage`.
-- Streaming behavior aligns with core policy and is clearly documented.
-- Errors normalized with no leakage; logs privacy-preserving and include request_id.
+- `chat_completions()` returns OpenAI-compliant response with `choices[0].message` and `usage`.
+- Streaming disabled with deterministic error.
+- Router-first parity: OpenAI options intercepted and forwarded/captured in `options`.
+- Structured responses supported via `response_format=json_object`.
 
 Test & Coverage Targets:
-- Unit tests (mock HTTP):
-  - Happy path mapping including `response_format` to `format`.
-  - Optional parameters omitted vs. set; mapping to `options`.
-  - Streaming request behavior per chosen policy.
-  - Missing `message` or malformed response → ProviderError.
-  - Timeout/HTTP errors → ProviderError.
-- Integration tests via core route asserting schema shape and error normalization.
+- Unit tests:
+  - Mapping of `response_format` to `format`, and options pass-through including structured hint.
+  - Streaming rejection.
+  - Invalid upstream payload → ProviderError.
+  - Client header forwarding (`X-Request-ID`) and localhost fallback behavior.
+- Integration tests via core to assert schema shape and normalized errors.
 
-Review Checklist:
-- Are roles and message structures preserved correctly?
-- Is `finish_reason` mapped properly under `done`/`done_reason` variants?
-- Are usage token fields robust to missing upstream counts?
+Review Checklist (DRY/Best Practices):
+- No duplicate mapping logic; shared helper paths where possible.
+- Minimal optional fields; no nulls; normalized types (e.g., stop to list[str]).
+- Low cyclomatic complexity and cohesive functions; strict typing; lint clean.

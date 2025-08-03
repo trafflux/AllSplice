@@ -220,7 +220,9 @@ class Settings(BaseSettings):
     CEREBRAS_API_KEY: str | None = Field(default=None)
     CEREBRAS_BASE_URL: HttpUrl | AnyHttpUrl | str | None = Field(default=None)
     # Default must align with tests preference (localhost)
-    OLLAMA_HOST: HttpUrl | AnyHttpUrl | str | None = Field(default="http://localhost:11434")
+    OLLAMA_HOST: HttpUrl | AnyHttpUrl | str | None = Field(
+        default="http://host.docker.internal:11434"
+    )
 
     # Timeouts
     REQUEST_TIMEOUT_S: int = Field(default=constants.DEFAULT_REQUEST_TIMEOUT_S, gt=0)
