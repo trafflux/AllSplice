@@ -1,25 +1,63 @@
-# Project Standards — Universal AI Gateway
+# Project Standards — AllSplice (Universal AI Gateway)
 
-Authoritative engineering standards for the Universal AI Gateway v1.0 and future work. These specifications align with PRD-1.0 and the organization-wide Python guidelines.
+Authoritative engineering standards for AllSplice v1.x and future work. These specifications align with PRD-1.0 and the organization-wide Python guidelines. This is a strict ruleset; contributions that follow these standards will avoid Ruff/Mypy errors, uphold DRY/TDD best practices, and remain CI-compliant.
 
 ## 1. Language, Runtime, and Style
 
 - Python: 3.12+ required.
-- Use uv and pyproject.toml for dependency management. Configure uv with `system = true` for Docker containers.
-- Typing: strict type hints for all public functions, methods, classes, and module variables. Codebase must be mypy-clean under strict settings.
+- Dependency management: uv + pyproject.toml. For Docker, configure uv with `system = true`.
+- Single-source config: All tooling config (ruff, mypy, pytest) is in pyproject.toml. Do not add separate config files.
+- Typing:
+  - Strict type hints for all public functions, methods, classes, and module variables.
+  - Codebase must be mypy-clean under strict settings; avoid `type: ignore` except for narrow, documented cases in tests.
 - Linting/Formatting:
-  - Ruff for linting AND formatting (unified tool). Configuration in pyproject.toml only.
+  - Ruff for linting AND formatting (unified). Configure only in pyproject.toml.
   - Selected rules: E, F, W, N, I, C90, UP, B, A, C4, T20, SIM
   - Complexity limit: max 10 (mccabe)
   - Line length: 100 characters
+  - isort via Ruff: known-first-party = ["ai_gateway"], combine-as-imports = true
   - Pre-commit hooks mandatory: ruff check, ruff format, mypy, whitespace, EOF newline.
 - Code Quality:
   - No unused code/vars; no wildcard imports.
-  - No broad except clauses; catch specific exceptions.
-  - Keep functions cohesive and small; cyclomatic complexity kept low (<10 enforced).
-  - Docstrings for all public classes and functions (Google or NumPy style).
-  - Use isort settings: known-first-party = ["ai_gateway"], combine-as-imports = true
+  - No broad `except:`; catch specific exceptions; never swallow errors silently.
+  - Keep functions cohesive and small; cyclomatic complexity < 10 enforced.
+  - Docstrings for all public classes/functions (Google or NumPy style).
+  - Prefer modern Python syntax: `X | None` over `Optional[X]`, `list[X]` over `List[X]`.
+  - Tests may allow broader exceptions per rule overrides; production code may not.
 
+## 2. Project Structure
+
+```
+src/ai_gateway/
+  api/            # app factory, routers (versioned namespaces)
+  providers/      # base interface and concrete providers (custom, cerebras, ollama), client wrappers
+  schemas/        # OpenAI-compatible request/response models, shared DTOs
+  config/         # config.py, constants.py, __init__.py
+  exceptions/     # custom error types and global exception handlers
+  middleware/     # auth dependency, correlation, logging, security headers
+  logging/        # logging setup and formatters
+  utils/          # reusable helpers (mapping, ID generation, etc.)
+tests/
+  api/
+  providers/
+  schemas/
+  config/
+  exceptions/
+  middleware/
+  logging/
+scripts/            # run scripts, docker entrypoints, utilities
+.github/workflows/  # CI pipelines
+docs/               # examples, standards, provider docs, streaming
+```
+
+- Tests mirror src structure.
+- Avoid circular imports; use dependency injection/composition root.
+- Providers:
+  - New providers live in `providers/` and implement the base interface (see §7).
+  - Client wrappers encapsulate HTTP/SDK specifics and timeouts.
+- Routing:
+  - Versioned namespaces: `/v1/`, `/cerebras/v1/`, `/ollama/v1/`.
+  - Health endpoint at `/healthz`.
 ## 2. Project Structure
 
 ```
@@ -68,6 +106,24 @@ docs/             # examples and additional docs (optional)
 
 ## 4. FastAPI Conventions
 
+- App factory: `ai_gateway.api.app.get_app()` returns a configured `FastAPI` instance.
+- Routers per namespace/version:
+  - `/v1/chat/completions` → Custom Processing Provider (default)
+  - `/cerebras/v1/chat/completions` → Cerebras Provider
+  - `/ollama/v1/chat/completions` → Ollama Provider
+  - `/healthz` → readiness/health endpoint
+- Dependency Injection:
+  - Inject config, provider instances, and auth dependency via `Depends`.
+  - Providers resolved in the app’s composition root to allow test-time substitution.
+- Pydantic models:
+  - All request/response payloads use typed Pydantic models.
+  - Forbid extra fields by default; validate enums/constraints.
+- Streaming responses:
+  - Use FastAPI `StreamingResponse` with `media_type="text/event-stream"` when `stream=true` and provider supports streaming.
+  - Include correlation headers (`X-Request-ID`, `x-request-id`) on streaming responses.
+  - End streams with `[DONE]` sentinel; map chunk objects to OpenAI-compatible `chat.completion.chunk`.
+## 4. FastAPI Conventions
+
 - App factory pattern: `ai_gateway.api.app.get_app()` returns a configured `FastAPI` instance.
 - Routers per namespace and version:
   - `/v1/chat/completions` → Custom Processing Provider (default)
@@ -88,13 +144,41 @@ docs/             # examples and additional docs (optional)
 - Failures return HTTP 401 with `WWW-Authenticate: Bearer` and standardized error payload.
 - No sessions or cookies; the service is stateless.
 
-## 6. OpenAI Compatibility Scope (v1.0)
+## 6. OpenAI Compatibility Scope (v1.x)
+
+- Supported endpoint: `POST /<namespace>/chat/completions` (chat completions).
+- Request/response must match OpenAI Chat Completions format:
+  - Response includes: `id`, `object`, `created`, `model`, `choices`, `usage`.
+- Streaming:
+  - Supported for Ollama (`/ollama/v1/chat/completions`) via SSE when `stream=true`.
+  - Non-streaming providers must return 501 when `stream=true`.
+- Out-of-scope (return 404/405 as appropriate): other OpenAI endpoints (images, audio) unless added via provider.
+## 6. OpenAI Compatibility Scope (v1.x)
 
 - Supported endpoint: `POST /<namespace>/chat/completions` only.
 - Request and response must match the OpenAI Chat Completions format:
   - Response must include: `id`, `object`, `created`, `model`, `choices`, `usage`.
 - Out-of-scope (return 404/405 as appropriate): streaming responses, embeddings, images, audio, other OpenAI endpoints.
 
+## 7. Provider Abstraction
+
+- Base Interface (`providers/base.py`):
+  - `class ChatProvider(Protocol):`
+    - `async def chat_completions(self, req: ChatCompletionRequest) -> ChatCompletionResponse: ...`
+    - Optional: `async def stream_chat_completions(self, req: ChatCompletionRequest) -> AsyncIterator[dict[str, Any]]: ...`
+- Implementations:
+  - CustomProcessingProvider (default): logs structured input, returns deterministic mock response.
+  - CerebrasProvider: maps to `cerebras` SDK, transforms to OpenAI schema.
+  - OllamaProvider: maps to `OllamaClient` and transforms to OpenAI schema; supports streaming.
+- Client wrappers (`cerebras_client.py`, `ollama_client.py`):
+  - Encapsulate third-party SDK/HTTP initialization, base URLs, timeouts, and request headers (incl. `X-Request-ID`).
+- Mapping rules:
+  - Normalize roles/content; set `created` to epoch seconds.
+  - Generate `id` as `chatcmpl-<ulid/uuid>` style; `object` = `chat.completion`.
+  - Map `finish_reason` to OpenAI enum values.
+  - Populate `usage` from provider if available; else conservative estimates or zeros with TODO noted.
+- Error normalization:
+  - Convert provider/network/timeout errors to `ProviderError` (HTTP 502); do not leak provider traces.
 ## 7. Provider Abstraction
 
 - Base Interface (`providers/base.py`):
@@ -143,12 +227,13 @@ docs/             # examples and additional docs (optional)
 - Correlation ID:
   - Middleware reads `X-Request-ID` or generates a new ID; use a `contextvar` to propagate.
   - Include `request_id` in all logs and pass to providers if possible.
+  - Streaming responses MUST include both `X-Request-ID` and `x-request-id` headers.
 - Security headers (enabled by default):
   - `X-Content-Type-Options: nosniff`
   - `X-Frame-Options: DENY`
   - `Referrer-Policy: no-referrer`
   - `Permissions-Policy: ()` or minimal safe defaults
-- CORS: only enable if explicitly required; default is disabled or restricted.
+- CORS: only enable if explicitly required; default disabled or restricted.
 - Timeouts: all outbound provider calls must have explicit timeouts from config.
 
 ## 10. Logging
@@ -163,14 +248,16 @@ docs/             # examples and additional docs (optional)
 
 ## 11. Testing and TDD
 
-- Testing framework: `pytest` with `pytest-asyncio`.
-- Coverage target: ≥ 85–90% for business logic; enforce via CI.
+- Frameworks: `pytest`, `pytest-asyncio`.
+- Approach: TDD where practical; every change includes tests (unit and/or integration).
+- Coverage target: ≥ 85–90% for business logic; enforced via CI.
 - Test categories:
   - Unit tests for models, config, utilities, and provider mapping (with mocks).
-  - API integration tests using `httpx.AsyncClient` against app factory.
-  - Error path tests for auth, validation, provider failures.
-- External SDKs and services must be mocked; no real calls in CI.
-- Test structure mirrors `src/` packages.
+  - API integration tests using `httpx.AsyncClient` and `ASGITransport` against app factory (no real network).
+  - Streaming tests: verify event-stream Content-Type, framing (`data: {json}\n\n`), `[DONE]`, and headers.
+  - Error path tests for auth, validation, provider/network failures.
+- No external calls in CI; stub/fake clients required.
+- Tests mirror `src/` tree; name tests descriptively and keep them deterministic.
 
 ## 12. Performance and Concurrency
 
@@ -191,9 +278,9 @@ docs/             # examples and additional docs (optional)
 
 - Manage dependencies in `pyproject.toml`; pin major versions.
 - Use uv with `system = true` for Docker container deployments.
-- Minimize dependencies; periodically update with CI verification.
+- Minimize dependencies; remove unused packages promptly.
 - Use uv lock files for reproducible builds.
-- All tool configurations (ruff, mypy, pytest) must be in pyproject.toml - no separate config files.
+- All tool configurations (ruff, mypy, pytest) must be in pyproject.toml — no separate config files.
 
 ## 15. Deployment and Operations
 
@@ -204,16 +291,20 @@ docs/             # examples and additional docs (optional)
   - Healthcheck using `/healthz`.
   - Readiness/liveness probes configured by platform.
 - Configuration via environment variables; secrets injected via platform secret manager.
+- Observability:
+  - Structured logs include: `timestamp`, `level`, `request_id`, `method`, `path`, `provider`, `status_code`, `duration_ms`, `message`.
+  - Do not log secrets; redact tokens/keys. Include request IDs in logs for correlation.
 
 ## 16. Documentation
 
 - README:
-  - Setup steps, environment variables, local run instructions.
-  - cURL examples for `/v1/chat/completions`, `/cerebras/v1/chat/completions`, `/ollama/v1/chat/completions`.
+  - Project purpose/pitch, setup, environment variables, local run instructions.
+  - cURL examples for non-streaming and streaming (SSE) requests.
 - `.env.example` listing all variables with comments.
-- PRD retained in repo (`PRD-1.0.md`).
+- PRD retained in repo (`docs/PRD-Initial-v1.0/PRD-Initial-Scope-v1.0.md`).
 - Maintain `CHANGELOG.md` per release.
-- Public APIs and critical modules have docstrings and usage notes.
+- Public APIs and critical modules require docstrings and usage notes.
+- Keep docs in sync with implemented streaming status and provider support.
 
 ## 18. Tool Configuration Standards
 
@@ -236,14 +327,17 @@ docs/             # examples and additional docs (optional)
 - **UV Configuration**:
   - system = true (for Docker containers, no venv)
 
-## 17. Acceptance Criteria for v1.0
+## 17. Acceptance Criteria (v1.x)
 
 - Endpoints implemented and authenticated:
   - `/v1/chat/completions` (CustomProcessingProvider)
   - `/cerebras/v1/chat/completions` (CerebrasProvider)
   - `/ollama/v1/chat/completions` (OllamaProvider)
   - `/healthz`
+- Streaming:
+  - `/ollama/v1/chat/completions` supports SSE when `stream=true` with OpenAI-compatible chunk objects and `[DONE]` sentinel.
+  - Non-streaming providers return 501 for `stream=true`.
 - Responses conform to OpenAI Chat Completions schema.
-- CI green: lint, type-check, tests, coverage threshold met.
+- CI green: ruff (check + format), mypy (strict), tests (coverage threshold met).
 - No secret leakage in logs; security headers enabled (if configured).
 - Structured logging with correlation ID in place.

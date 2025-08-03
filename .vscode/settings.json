@@ -21,13 +21,13 @@
         "source.organizeImports": "explicit"
     },
     "mypy.runUsingActiveInterpreter": true,
-    "python.analysis.typeCheckingMode": "basic",
-    "github.copilot.chat.agent.terminal.allowList": {
-        "python": true,
-        "uv": true,
-        "uvicorn": true,
-        "pytest": true,
-        "mypy": true,
-        "ruff": true
-    },
+    "python.analysis.typeCheckingMode": "basic"
+    // "github.copilot.chat.agent.terminal.allowList": {
+    //     "python": true,
+    //     "uv": true,
+    //     "uvicorn": true,
+    //     "pytest": true,
+    //     "mypy": true,
+    //     "ruff": true
+    // },
 }

@@ -20,7 +20,7 @@ OpenAI-compatible API server to route chat completions to multiple providers (Cu
 Phase 0 scaffolding and CI/CD setup.
 
 ## Docs
-- PRD: PRD-1.0.md
+- PRD: docs/PRD-Initial-v1.0/PRD-Initial-Scope-v1.0.md
 - Tasks: TASKS-1.0.md
 - Standards: PROJECT-STANDARDS.md
 

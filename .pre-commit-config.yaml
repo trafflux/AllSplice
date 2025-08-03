@@ -1,3 +1,4 @@
+---
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.5.0
@@ -9,7 +10,12 @@ repos:
     rev: v1.17.1
     hooks:
       - id: mypy
-        additional_dependencies: [pydantic, pydantic-settings, fastapi, httpx, typing-extensions]
+        additional_dependencies:
+          - pydantic
+          - pydantic-settings
+          - fastapi
+          - httpx
+          - typing-extensions
         files: ^src/
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
@@ -32,3 +38,16 @@ repos:
             .*\.egg-info/.*|
             Makefile.*
           )$
+
+  - repo: https://github.com/adrienverge/yamllint.git
+    rev: v1.35.1
+    hooks:
+      - id: yamllint
+        files: \.(yml|yaml)$
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-merge-conflict
+      - id: check-added-large-files
+      - id: debug-statements

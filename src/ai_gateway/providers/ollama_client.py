@@ -157,18 +157,35 @@ class OllamaClient:
         return {**(options or {}), **loose} if loose else options
 
     def _parse_stream_line(self, line: str) -> dict[str, Any] | None:
-        """Parse a line from streaming response, stripping SSE prefix and sentinel."""
-        if not line or line.strip() == "[DONE]":
+        """Parse a line from streaming response, stripping SSE/JSONL prefixes and sentinels.
+
+        Ollama streaming can be either JSONL (one JSON object per line) or SSE-style with 'data:'.
+        It may also emit '[DONE]' or '{"done": true, ...}' as final object.
+        """
+        if not line:
             return None
-        text = line
+        text = line.strip()
+        if not text:
+            return None
+        # Handle explicit OpenAI-style sentinel
+        if text == "[DONE]":
+            return None
+        # Strip SSE prefix if present
         if text.startswith("data:"):
             text = text[len("data:") :].strip()
+            if not text:
+                return None
+            if text == "[DONE]":
+                return None
         try:
             return cast(dict[str, Any], httpx.Response(200, text=text).json())
         except Exception:
             import json as _json
 
-            obj = _json.loads(text)
+            try:
+                obj = _json.loads(text)
+            except Exception:
+                return None
             return obj if isinstance(obj, dict) else None
 
     async def _stream_response(self, body: dict[str, Any]) -> AsyncGenerator[dict[str, Any], None]:
@@ -177,10 +194,24 @@ class OllamaClient:
             "POST", "/api/chat", json=body, headers=await self._headers()
         ) as resp:
             resp.raise_for_status()
-            async for line in resp.aiter_lines():
-                parsed = self._parse_stream_line(line)
-                if parsed:
-                    yield parsed
+            # Prefer JSONL iteration for robustness; fall back to lines
+            try:
+                async for line in resp.aiter_lines():
+                    parsed = self._parse_stream_line(line)
+                    if parsed is not None:
+                        yield parsed
+            except Exception:
+                # As a fallback, try reading raw bytes and splitting
+                async for chunk_bytes in resp.aiter_bytes():
+                    try:
+                        text2 = chunk_bytes.decode(errors="ignore")
+                    except Exception:
+                        # If decode fails, skip this chunk
+                        continue
+                    for line in text2.splitlines():
+                        parsed = self._parse_stream_line(line)
+                        if parsed is not None:
+                            yield parsed
 
     async def chat_stream(
         self,
@@ -191,15 +222,55 @@ class OllamaClient:
         format_hint: str | None = None,
         **kwargs: Any,
     ) -> AsyncGenerator[dict[str, Any], None]:
-        """POST /api/chat with stream=True, yielding JSON chunks."""
-        body: dict[str, Any] = {"model": model, "messages": messages, "stream": True}
+        """POST /api/chat with stream=True, yielding JSON chunks.
+
+        API parity notes (Ollama docs v0.1+):
+        - Streaming endpoint remains POST /api/chat with "stream": true in the JSON body.
+        - Upstream yields JSON objects per line; final object includes {"done": true, "done_reason": "..."}.
+        - Some deployments may wrap as SSE with "data:" prefixes; parser handles both.
+        """
+        # Ollama 0.10.x requires 'messages' items to have string content; coerce defensively.
+        safe_messages: list[dict[str, Any]] = []
+        for m in messages:
+            role = m.get("role", "user")
+            raw_content: Any = m.get("content", "")
+            content_str: str
+            # If content is list (OpenAI tool/parts), coerce to concatenated string to avoid 400
+            if isinstance(raw_content, list):
+                text_parts: list[str] = []
+                for part in raw_content:
+                    if isinstance(part, dict):
+                        txt = part.get("text")
+                        if isinstance(txt, str):
+                            text_parts.append(txt)
+                        else:
+                            cont = part.get("content")
+                            if isinstance(cont, str):
+                                text_parts.append(cont)
+                        # Skip unsupported dict part types
+                        continue
+                    if isinstance(part, str):
+                        text_parts.append(part)
+                content_str = "\n".join(p for p in text_parts if p)
+            elif isinstance(raw_content, str):
+                content_str = raw_content
+            else:
+                content_str = str(raw_content)
+            safe_messages.append({"role": role, "content": content_str})
+
+        body: dict[str, Any] = {"model": model, "messages": safe_messages, "stream": True}
         options = self._fold_loose_options(options, **kwargs)
         if options:
             body["options"] = options
         if format_hint == "json":
+            # Ollama supports "format": "json" for JSON-object responses
             body["format"] = "json"
 
         async for chunk in self._stream_response(body):
+            # Stop if upstream signals done (even if additional lines appear)
+            if isinstance(chunk, dict) and chunk.get("done") is True:
+                yield chunk
+                break
             yield chunk
 
     async def get_tags(self) -> dict[str, Any]:

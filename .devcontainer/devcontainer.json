@@ -6,18 +6,18 @@
     },
     "customizations": {
         "vscode": {
+            // Cline and Copilot extensions for AI development (Optional)
             "extensions": [
                 "ms-python.python",
                 "ms-python.vscode-pylance",
-                "ms-azuretools.vscode-docker",
-                "saoudrizwan.claude-dev",
                 "matangover.mypy",
                 "charliermarsh.ruff",
+                "ms-azuretools.vscode-docker",
+                "saoudrizwan.claude-dev",
                 "github.copilot",
                 "github.copilot-chat"
             ],
             "settings": {
-                // "python.linting.enabled": false,
                 "python.defaultInterpreterPath": "/usr/local/bin/python",
                 "python.terminal.activateEnvironment": false,
                 "python.languageServer": "Pylance",
@@ -27,7 +27,6 @@
                 "python.analysis.useLibraryCodeForTypes": true,
                 "files.insertFinalNewline": true,
                 "files.trimTrailingWhitespace": true,
-                // Python / Testing
                 "python.testing.pytestEnabled": true,
                 "python.testing.pytestArgs": [
                     "tests"
@@ -35,42 +34,19 @@
                 "[jsonc]": {
                     "editor.defaultFormatter": "vscode.json-language-features"
                 },
-                // Test discovery
                 "python.testing.unittestEnabled": false
-                // "python.defaultInterpreterPath": "/usr/local/bin/python",
-                // "python.terminal.activateEnvironment": false,
-                // "editor.formatOnSave": true,
-                // "python.linting.enabled": false,
-                // "python.analysis.extraPaths": [
-                //     "./src"
-                // ],
-                // "editor.defaultFormatter": "charliermarsh.ruff",
-                // "editor.codeActionsOnSave": {
-                //     "source.fixAll": "explicit",
-                //     "source.organizeImports": "explicit"
-                // },
-                // "python.analysis.indexing": true,
-                // "python.analysis.autoSearchPaths": true,
-                // "python.analysis.diagnosticMode": "workspace",
-                // "python.analysis.typeCheckingMode": "basic",
-                // "python.analysis.useLibraryCodeForTypes": true
-                //DISABLED FOR NOW
-                // Test discovery
-                // "python.testing.pytestEnabled": true,
-                // "python.testing.pytestArgs": [
-                //     "tests"
-                // ],
-                // "python.testing.unittestEnabled": false
             }
         }
     },
     "workspaceFolder": "/workspace",
     "mounts": [
+        // Mounts the local workspace folder to the container's workspace directory
         "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=delegated"
     ],
     "remoteUser": "root",
     "runArgs": [
         "--network=devnet"
     ],
+    // Copies the Cline MCP settings file to the global storage for the Cline extension (Optional)
     "postCreateCommand": "if [ -f /workspace/.clinerules/cline_mcp_settings.json ]; then mkdir -p /root/.vscode-server/data/User/globalStorage/saoudrizwan.claude-dev/settings && cp /workspace/.clinerules/cline_mcp_settings.json /root/.vscode-server/data/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json; fi"
 }

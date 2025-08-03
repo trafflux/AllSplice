@@ -112,7 +112,7 @@ def _mock_chat_response(model: str) -> ChatCompletionResponse:
     )
 
 
-@v1_router.post("/chat/completions")
+@v1_router.post("/chat/completions", response_model=None)
 async def chat_completions_v1(
     req: ChatCompletionRequest,
     request: Request,
@@ -155,7 +155,7 @@ async def create_embeddings_v1(
     return await provider.create_embeddings(req)
 
 
-@cerebras_router.post("/chat/completions")
+@cerebras_router.post("/chat/completions", response_model=None)
 async def chat_completions_cerebras(
     req: ChatCompletionRequest,
     request: Request,
@@ -208,7 +208,7 @@ async def create_embeddings_cerebras(
         raise exc
 
 
-@ollama_router.post("/chat/completions")
+@ollama_router.post("/chat/completions", response_model=None)
 async def chat_completions_ollama(
     req: ChatCompletionRequest,
     request: Request,

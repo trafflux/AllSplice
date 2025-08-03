@@ -16,7 +16,7 @@ __pycache__/
 .eggs/
 *.egg
 *.egg-info/
-build/
+build/**
 dist/
 *.mo
 *.pot
@@ -25,8 +25,8 @@ dist/
 # IDE specific files (e.g., VS Code)
 # .vscode/
 # Add specific .vscode files if you don't want them committed, e.g.
-# .vscode/*.log
-# .vscode/*.code-workspace
+.vscode/*.log
+.vscode/*.code-workspace
 
 # Generated documentation
 docs/_build/
@@ -37,6 +37,3 @@ docs/_build/
 # Test artifacts
 .pytest_cache/
 htmlcov/
-
-# Any specific generated code
-/src/generated/ # Example

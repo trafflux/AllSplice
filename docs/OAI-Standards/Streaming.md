@@ -231,7 +231,20 @@ Implementation will proceed with S1–S4 iteratively:
 - Add tests and documentation updates (S4).
 
 Progress log:
-- [ ] S1 — Provider interface + routing: PENDING
-- [ ] S2 — Ollama streaming client + provider mapping: PENDING
-- [ ] S3 — SSE headers/polish: PENDING
-- [ ] S4 — Tests/docs updates: PENDING
+- [x] S1 — Provider interface + routing: COMPLETE
+  - Routers updated to feature-detect stream=true; return 501 JSON for non-streaming providers.
+  - Endpoints now set response_model=None for StreamingResponse/JSONResponse unions to avoid FastAPI modeling errors.
+- [x] S2 — Ollama streaming client + provider mapping: COMPLETE
+  - httpx.AsyncClient.stream used to POST /api/chat with "stream": true.
+  - Robust parsing for both JSONL and SSE-framed "data:" lines; ignores [DONE] sentinels from upstream.
+  - Coerces list-based message content to string for Ollama v0.10.1 to prevent 400 Bad Request.
+  - Provider maps upstream chunks to OpenAI-compatible chunk events and emits final chunk with finish_reason.
+- [x] S3 — SSE headers/polish: COMPLETE
+  - StreamingResponse with media_type="text/event-stream".
+  - Emits events as "data: {json}\n\n" and terminates with "data: [DONE]\n\n".
+  - Correlation headers included: "X-Request-ID" and "x-request-id". Cache-Control: no-cache ensured.
+- [?] S4 — Tests/docs updates: NEXT
+  - Add tests for streaming routes (Ollama happy path, 501 for unsupported providers).
+  - Add Ollama client parsing tests (JSONL/SSE/[DONE], content coercion).
+  - Add provider mapping tests (delta chunks and finalization).
+  - Update README with curl -N streaming example and header notes.

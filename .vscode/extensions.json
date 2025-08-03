@@ -3,8 +3,10 @@
         "ms-python.python",
         "ms-python.vscode-pylance",
         "charliermarsh.ruff",
-        "ms-python.mypy-type-checker",
         "matangover.mypy",
-         "ms-ossdata.vscode-pgsql"
+        "ms-azuretools.vscode-docker",
+        "saoudrizwan.claude-dev",
+        "github.copilot",
+        "github.copilot-chat"
     ]
 }

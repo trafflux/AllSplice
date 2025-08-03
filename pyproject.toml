@@ -1,7 +1,7 @@
 [project]
 name = "allsplice"
-version = "1.0.0"
-description = "Universal AI Gateway: OpenAI-compatible API server to route chat completions to multiple providers."
+version = "1.0.1"
+description = "AllSplice: A Universal OpenAI-compatible AI Gateway server to route chat completions to multiple providers."
 authors = [
     { name = "trafflux" }
 ]
