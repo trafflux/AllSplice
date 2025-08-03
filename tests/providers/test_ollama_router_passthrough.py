@@ -53,7 +53,7 @@ async def test_chat_completions_pass_through_all_fields_to_client() -> None:
 
     # Assert: was client.chat called with expected shape?
     assert mock_client.chat.await_count == 1
-    args, kwargs = mock_client.chat.await_args  # type: ignore[attr-defined]
+    args, kwargs = mock_client.chat.await_args
     assert kwargs.get("model") == "ollama-test"
     # messages mapping
     assert kwargs.get("messages") == [

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Protocol, TypeVar
+from typing import Protocol, TypeVar, runtime_checkable
 
 from ai_gateway.schemas.openai_chat import ChatCompletionRequest, ChatCompletionResponse
 from ai_gateway.schemas.openai_embeddings import CreateEmbeddingsRequest, CreateEmbeddingsResponse
@@ -9,6 +9,7 @@ from ai_gateway.schemas.openai_models import ListResponse, Model
 T = TypeVar("T")
 
 
+@runtime_checkable
 class ChatProvider(Protocol):
     """Protocol for chat completion providers.
 
@@ -34,3 +35,13 @@ class ChatProvider(Protocol):
     async def create_embeddings(self, req: CreateEmbeddingsRequest) -> CreateEmbeddingsResponse:
         """Create embeddings for the given input."""
         ...
+
+
+# Optional streaming capability note:
+# Implementers MAY provide an instance method named
+#   stream_chat_completions(self, req) -> AsyncIterator[dict[str, Any]]
+# Routers should feature-detect at runtime, e.g.:
+#   if hasattr(provider, "stream_chat_completions"):
+#       async for chunk in provider.stream_chat_completions(req): ...
+# This remains intentionally undocumented on the Protocol to avoid making implementers abstract
+# in type checkers. We intentionally do not use any type: ignore markers here to keep mypy clean.

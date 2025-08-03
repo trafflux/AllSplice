@@ -46,12 +46,17 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
     Middleware that ensures each request has a stable request ID, sourced from
     X-Request-ID header if present or generated otherwise. The ID is stored in a
     contextvar and added to the response headers.
+
+    Additionally, expose a lower-case 'x-request-id' header alias to align with OpenAI SDK examples
+    that access response._request_id from the 'x-request-id' header. Some intermediaries may
+    canonicalize headers; we explicitly set both casings to maximize compatibility.
     """
 
     header_name = "X-Request-ID"
+    header_alias = "x-request-id"
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
-        incoming = request.headers.get(self.header_name)
+        incoming = request.headers.get(self.header_name) or request.headers.get(self.header_alias)
         req_id = incoming.strip() if incoming else _generate_request_id()
 
         token = _request_id_ctx.set(req_id)
@@ -62,6 +67,7 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
             # (especially important for logging that formats after handler returns)
             try:
                 response.headers[self.header_name] = req_id
+                response.headers[self.header_alias] = req_id
             finally:
                 # Always reset context to avoid leaking across requests in async server
                 _request_id_ctx.reset(token)

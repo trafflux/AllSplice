@@ -8,14 +8,20 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class CreateEmbeddingsRequest(BaseModel):
-    """OpenAI-compatible Embeddings request."""
+    """OpenAI-compatible Embeddings request.
 
-    model_config = ConfigDict(extra="forbid")
+    v1 scope changes:
+    - Be permissive to unknown fields (extra="ignore").
+    - Add optional `dimensions` to align with OpenAI usage on certain models.
+    """
+
+    model_config = ConfigDict(extra="ignore")
 
     model: str
     input: str | list[str] | list[int] | list[list[int]]
     user: str | None = None
     encoding_format: Literal["float", "base64"] = "float"
+    dimensions: int | None = Field(default=None, gt=0)
 
     @field_validator("model")
     @classmethod
@@ -85,7 +91,8 @@ class EmbeddingUsage(BaseModel):
 class CreateEmbeddingsResponse(BaseModel):
     """OpenAI-compatible Embeddings response."""
 
-    model_config = ConfigDict(extra="forbid")
+    # Allow forward-compatible extra fields in case upstream adds metadata.
+    model_config = ConfigDict(extra="ignore")
 
     object: Literal["list"] = "list"
     data: list[EmbeddingItem]

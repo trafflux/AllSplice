@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import time
 import uuid
+from collections.abc import AsyncIterator, Callable
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from ai_gateway.config.constants import (
     CEREBRAS_BASE,
@@ -13,6 +15,7 @@ from ai_gateway.config.constants import (
 )
 from ai_gateway.exceptions.errors import ProviderError
 from ai_gateway.middleware.auth import auth_bearer
+from ai_gateway.middleware.correlation import get_request_id
 from ai_gateway.providers.cerebras import CerebrasProvider
 from ai_gateway.providers.custom import CustomProcessingProvider
 from ai_gateway.providers.ollama import OllamaProvider  # Phase 7 provider
@@ -112,10 +115,26 @@ def _mock_chat_response(model: str) -> ChatCompletionResponse:
 @v1_router.post("/chat/completions")
 async def chat_completions_v1(
     req: ChatCompletionRequest,
+    request: Request,
     token: str = Depends(auth_bearer),
     provider: CustomProcessingProvider = _custom_provider_dep,
-) -> ChatCompletionResponse:
-    # Use the CustomProcessingProvider to generate a response
+) -> ChatCompletionResponse | JSONResponse:
+    # Custom provider does not implement streaming in v1.0
+    if getattr(req, "stream", False):
+        return JSONResponse(
+            status_code=501,
+            content={
+                "error": {
+                    "type": "not_implemented",
+                    "message": "Streaming not yet supported for this provider",
+                }
+            },
+            headers={
+                "X-Request-ID": get_request_id() or "",
+                "x-request-id": get_request_id() or "",
+                "WWW-Authenticate": "Bearer",
+            },
+        )
     return await provider.chat_completions(req)
 
 
@@ -139,9 +158,26 @@ async def create_embeddings_v1(
 @cerebras_router.post("/chat/completions")
 async def chat_completions_cerebras(
     req: ChatCompletionRequest,
+    request: Request,
     token: str = Depends(auth_bearer),
     provider: CerebrasProvider = _cerebras_provider_dep,
-) -> ChatCompletionResponse:
+) -> ChatCompletionResponse | JSONResponse:
+    # Cerebras streaming not supported in v1.0
+    if getattr(req, "stream", False):
+        return JSONResponse(
+            status_code=501,
+            content={
+                "error": {
+                    "type": "not_implemented",
+                    "message": "Streaming not yet supported for this provider",
+                }
+            },
+            headers={
+                "X-Request-ID": get_request_id() or "",
+                "x-request-id": get_request_id() or "",
+                "WWW-Authenticate": "Bearer",
+            },
+        )
     try:
         return await provider.chat_completions(req)
     except ProviderError as exc:
@@ -175,9 +211,51 @@ async def create_embeddings_cerebras(
 @ollama_router.post("/chat/completions")
 async def chat_completions_ollama(
     req: ChatCompletionRequest,
+    request: Request,
     token: str = Depends(auth_bearer),
     provider: OllamaProvider = _ollama_provider_dep,
-) -> ChatCompletionResponse:
+) -> ChatCompletionResponse | JSONResponse | StreamingResponse:
+    # If stream requested and provider supports streaming, return SSE
+    if getattr(req, "stream", False) and hasattr(provider, "stream_chat_completions"):
+        # Generator that yields SSE data: lines starting with "data: " and ending with double newline
+        async def event_source() -> AsyncIterator[str]:
+            # Local import to avoid global import when not streaming
+            import json
+
+            # Iterate provider's streaming chunks (feature-detected)
+            stream_fn = provider.stream_chat_completions
+            async for chunk in stream_fn(req):
+                yield f"data: {json.dumps(chunk, separators=(',', ':'))}\n\n"
+            # Per OpenAI-like behavior, end of stream indicated by [DONE]; emit as a sentinel event
+            yield "data: [DONE]\n\n"
+
+        headers = {
+            "X-Request-ID": get_request_id() or "",
+            "x-request-id": get_request_id() or "",
+            "Cache-Control": "no-cache",
+        }
+        # Cast to a callable returning an async iterator to satisfy type checker for StreamingResponse
+        iterator_factory: Callable[[], AsyncIterator[str]] = event_source
+        stream_iter: AsyncIterator[str] = iterator_factory()
+        return StreamingResponse(stream_iter, media_type="text/event-stream", headers=headers)
+
+    # If stream requested but provider lacks streaming capability, return 501
+    if getattr(req, "stream", False):
+        return JSONResponse(
+            status_code=501,
+            content={
+                "error": {
+                    "type": "not_implemented",
+                    "message": "Streaming not yet supported for this provider",
+                }
+            },
+            headers={
+                "X-Request-ID": get_request_id() or "",
+                "x-request-id": get_request_id() or "",
+                "WWW-Authenticate": "Bearer",
+            },
+        )
+
     try:
         return await provider.chat_completions(req)
     except ProviderError as exc:

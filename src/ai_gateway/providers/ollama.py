@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 import uuid
+from collections.abc import AsyncIterator
 from typing import Any
 
 from ai_gateway.config.config import get_settings
@@ -50,8 +51,18 @@ class OllamaProvider(ChatProvider):
     # ---- Internal helpers to keep complexity low ----
 
     @staticmethod
-    def _messages_to_dicts(messages: list[ChatMessage]) -> list[dict[str, str]]:
-        return [{"role": m.role, "content": m.content} for m in messages]
+    def _messages_to_dicts(messages: list[ChatMessage]) -> list[dict[str, Any]]:
+        # Allow content to be either str or list[parts]; pass through as-is for upstream client.
+        out: list[dict[str, Any]] = []
+        for m in messages:
+            item: dict[str, Any] = {"role": m.role}
+            # Preserve content as sent; union type is already compatible with dict[str, Any] value.
+            item["content"] = m.content
+            # Include tool association if present (used by some tool flows)
+            if getattr(m, "tool_call_id", None):
+                item["tool_call_id"] = m.tool_call_id
+            out.append(item)
+        return out
 
     @staticmethod
     def _format_hint(req: ChatCompletionRequest) -> str | None:
@@ -147,7 +158,7 @@ class OllamaProvider(ChatProvider):
         )
 
     async def chat_completions(self, req: ChatCompletionRequest) -> ChatCompletionResponse:
-        # Enforce non-streaming in v1.0
+        # Enforce non-streaming in v1.0 for this method; routers will branch to streaming when requested.
         if getattr(req, "stream", False):
             raise ProviderError("Streaming is not supported in v1.0")
 
@@ -171,6 +182,78 @@ class OllamaProvider(ChatProvider):
             raise ProviderError("Upstream provider error") from exc
 
         return self._map_response_to_openai(raw, req.model)
+
+    async def stream_chat_completions(
+        self, req: ChatCompletionRequest
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Yield OpenAI-compatible chat.completion.chunk objects mapped from Ollama streaming.
+
+        Routers wrap this generator in an SSE (text/event-stream) response.
+        """
+        # Prepare inputs once
+        in_messages = self._messages_to_dicts(req.messages)
+        format_hint = self._format_hint(req)
+        options = self._build_options(req, format_hint)
+
+        # Static id and created timestamp per OpenAI streaming semantics
+        completion_id = _gen_id()
+        created = _now_epoch()
+
+        try:
+            # Use streaming client to get upstream incremental JSON objects
+            async for obj in self._client.chat_stream(
+                model=req.model,
+                messages=in_messages,
+                options=options or None,
+                format_hint=format_hint,
+            ):
+                # Upstream may provide {"message": {"content": "..."},"done": false} progressively
+                delta_text = ""
+                try:
+                    msg = obj.get("message") if isinstance(obj, dict) else None
+                    if isinstance(msg, dict):
+                        piece = msg.get("content")
+                        if isinstance(piece, str):
+                            delta_text = piece
+                except Exception:
+                    delta_text = ""
+
+                # Emit OpenAI-like chunk if we have any delta text
+                if delta_text:
+                    yield {
+                        "id": completion_id,
+                        "object": "chat.completion.chunk",
+                        "created": created,
+                        "model": req.model,
+                        "choices": [
+                            {
+                                "index": 0,
+                                "delta": {"content": delta_text},
+                                "finish_reason": None,
+                            }
+                        ],
+                    }
+
+                # Check for done / finish_reason signals; Ollama uses done/done_reason on final packet
+                if isinstance(obj, dict) and obj.get("done") is True:
+                    finish_reason = obj.get("done_reason") or "stop"
+                    yield {
+                        "id": completion_id,
+                        "object": "chat.completion.chunk",
+                        "created": created,
+                        "model": req.model,
+                        "choices": [
+                            {
+                                "index": 0,
+                                "delta": {},
+                                "finish_reason": str(finish_reason),
+                            }
+                        ],
+                    }
+                    break
+        except Exception as exc:
+            # Normalize to ProviderError so router returns 502 and terminates stream
+            raise ProviderError("Upstream provider error") from exc
 
     async def list_models(self) -> ListResponse[Model]:
         """Map GET /api/tags from Ollama to OpenAI ListResponse[Model]."""
@@ -223,14 +306,30 @@ class OllamaProvider(ChatProvider):
         return ListResponse[Model](data=out)
 
     async def create_embeddings(self, req: CreateEmbeddingsRequest) -> CreateEmbeddingsResponse:
-        """Create embeddings via Ollama /api/embeddings with router-first normalization."""
+        """Create embeddings via Ollama /api/embeddings with router-first normalization.
+
+        Phase 5: forward optional 'dimensions' when provided; upstream may ignore if unsupported.
+        """
         items = normalize_input_to_strings(req.input)
 
         data: list[EmbeddingItem] = []
         # v1.0 simplicity: sequential calls for each input to keep behavior predictable
         for idx, text in enumerate(items):
             try:
-                raw = await self._client.create_embeddings(model=req.model, prompt=text)
+                # Forward dimensions if supported by the client; otherwise client may ignore.
+                dims = getattr(req, "dimensions", None)
+                # Call signature accepts optional dimensions kwarg; pass only if present
+                if isinstance(dims, int) and dims > 0:
+                    raw = await self._client.create_embeddings(
+                        model=req.model,
+                        prompt=text,
+                        dimensions=dims,
+                    )
+                else:
+                    raw = await self._client.create_embeddings(
+                        model=req.model,
+                        prompt=text,
+                    )
             except Exception as exc:
                 raise ProviderError("Upstream provider error") from exc
             # Expected shape from client/fallback: {"data": [{"embedding": [...], "index": 0}], "model": "..."}
@@ -242,8 +341,10 @@ class OllamaProvider(ChatProvider):
                     if isinstance(first, dict):
                         vec = first.get("embedding")
             if not isinstance(vec, list):
-                # Fallback to deterministic vector to avoid failures in dev if upstream changes
-                vec = deterministic_vector(text, dim=16)
+                # Fallback to deterministic vector; prefer requested dimensions when present.
+                dim = int(getattr(req, "dimensions", 16) or 16)
+                dim = 16 if dim <= 0 else dim
+                vec = deterministic_vector(text, dim=dim)
             data.append(EmbeddingItem(embedding=vec, index=idx))
 
         # Usage accounting: conservative zeros (upstream does not provide usage)

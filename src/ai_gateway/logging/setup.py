@@ -119,6 +119,7 @@ def configure_logging(*, level: int | None = None) -> None:
 
     Does NOT import settings; reads LOG_LEVEL env directly if level is None.
     """
+
     root = logging.getLogger()
     # Idempotency: if a handler with our formatter is already present, return.
     for h in root.handlers:
@@ -137,6 +138,13 @@ def configure_logging(*, level: int | None = None) -> None:
     for h in list(root.handlers):
         root.removeHandler(h)
     root.addHandler(handler)
+
+    # Also configure uvicorn loggers to use our handler and log level 8/3/2025
+    for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+        logger = logging.getLogger(name)
+        logger.setLevel(log_level)
+        logger.handlers = [handler]
+        logger.propagate = False
 
 
 def _resolve_request_id(record: logging.LogRecord) -> str | None:

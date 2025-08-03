@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import Any
+from collections.abc import AsyncGenerator, Callable
+from typing import Any, cast
 
 import anyio
 import httpx
@@ -11,7 +11,7 @@ from ai_gateway.middleware.correlation import get_request_id
 
 
 class OllamaClient:
-    """Async HTTP client wrapper for the Ollama API (non-streaming paths).
+    """Async HTTP client wrapper for the Ollama API (supports streaming and non-streaming).
 
     Endpoints:
       - POST /api/chat
@@ -21,7 +21,7 @@ class OllamaClient:
     Notes:
       - Base URL from config OLLAMA_HOST; timeout from REQUEST_TIMEOUT_S.
       - Forwards X-Request-ID header when available.
-      - Only non-streaming chat supported in v1.0.
+      - Streaming chat supported via `chat_stream` using httpx.AsyncClient.stream.
 
     Testability:
       - httpx client is injectable (session factory) to avoid hard dependencies and enable transport mocking.
@@ -140,6 +140,68 @@ class OllamaClient:
                 }
             raise
 
+    def _fold_loose_options(
+        self,
+        options: dict[str, Any] | None,
+        **kwargs: Any,
+    ) -> dict[str, Any] | None:
+        """Fold loose kwargs into generation options for back-compat."""
+        loose: dict[str, Any] = {}
+        for key in ("temperature", "top_p", "seed", "max_tokens", "stop", "num_predict"):
+            val = kwargs.get(key)
+            if val is not None:
+                if key == "max_tokens":
+                    loose["num_predict"] = val
+                else:
+                    loose[key] = val
+        return {**(options or {}), **loose} if loose else options
+
+    def _parse_stream_line(self, line: str) -> dict[str, Any] | None:
+        """Parse a line from streaming response, stripping SSE prefix and sentinel."""
+        if not line or line.strip() == "[DONE]":
+            return None
+        text = line
+        if text.startswith("data:"):
+            text = text[len("data:") :].strip()
+        try:
+            return cast(dict[str, Any], httpx.Response(200, text=text).json())
+        except Exception:
+            import json as _json
+
+            obj = _json.loads(text)
+            return obj if isinstance(obj, dict) else None
+
+    async def _stream_response(self, body: dict[str, Any]) -> AsyncGenerator[dict[str, Any], None]:
+        """Helper to stream and parse responses."""
+        async with self._client.stream(
+            "POST", "/api/chat", json=body, headers=await self._headers()
+        ) as resp:
+            resp.raise_for_status()
+            async for line in resp.aiter_lines():
+                parsed = self._parse_stream_line(line)
+                if parsed:
+                    yield parsed
+
+    async def chat_stream(
+        self,
+        model: str,
+        messages: list[dict[str, str]],
+        *,
+        options: dict[str, Any] | None = None,
+        format_hint: str | None = None,
+        **kwargs: Any,
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """POST /api/chat with stream=True, yielding JSON chunks."""
+        body: dict[str, Any] = {"model": model, "messages": messages, "stream": True}
+        options = self._fold_loose_options(options, **kwargs)
+        if options:
+            body["options"] = options
+        if format_hint == "json":
+            body["format"] = "json"
+
+        async for chunk in self._stream_response(body):
+            yield chunk
+
     async def get_tags(self) -> dict[str, Any]:
         """GET /api/tags → returns available models (or deterministic stub in test mode)."""
         try:
@@ -162,9 +224,17 @@ class OllamaClient:
                 return {"models": [{"name": "ollama-tiny"}, {"name": "ollama-medium"}]}
             raise
 
-    async def create_embeddings(self, *, model: str, prompt: str) -> dict[str, Any]:
-        """POST /api/embeddings (or deterministic stub in test mode)."""
-        body = {"model": model, "prompt": prompt}
+    async def create_embeddings(
+        self, *, model: str, prompt: str, dimensions: int | None = None
+    ) -> dict[str, Any]:
+        """POST /api/embeddings (or deterministic stub in test mode).
+
+        Phase 5: Accept optional `dimensions` and forward when present. Upstream may ignore.
+        """
+        body: dict[str, Any] = {"model": model, "prompt": prompt}
+        if dimensions is not None and dimensions > 0:
+            body["dimensions"] = int(dimensions)
+
         try:
             resp = await self._client.post(
                 "/api/embeddings", json=body, headers=await self._headers()
@@ -184,8 +254,14 @@ class OllamaClient:
         ):
             if self._base_url.startswith("http://localhost:11434"):
                 # Deterministic stub payload similar to upstream shape
+                # Use provided dimensions for fallback vector length when reasonable; else default.
+                dim = 16
+                if dimensions is not None and dimensions > 0 and dimensions <= 2048:
+                    dim = int(dimensions)
+                # simple deterministic vector based on prompt length (no heavy deps in client)
+                base = [((i % 10) - 5) / 5.0 for i in range(dim)]
                 return {
-                    "data": [{"embedding": [0.0, 0.1, 0.2], "index": 0}],
+                    "data": [{"embedding": base, "index": 0}],
                     "model": model,
                     "object": "list",
                 }

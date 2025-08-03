@@ -2,19 +2,19 @@ from __future__ import annotations
 
 import time
 import uuid
-from typing import Any
+from typing import Any, cast
 
 from ai_gateway.exceptions.errors import ProviderError
 from ai_gateway.providers.base import ChatProvider
 from ai_gateway.providers.cerebras_client import CerebrasClient
-from ai_gateway.schemas.openai_chat import (
+from ai_gateway.schemas import (
     ChatCompletionRequest,
     ChatCompletionResponse,
     ChatMessage,
     Choice,
-    FinishReasonEnum,
     Usage,
 )
+from ai_gateway.schemas.openai_chat import FinishReasonEnum
 from ai_gateway.schemas.openai_embeddings import (
     CreateEmbeddingsRequest,
     CreateEmbeddingsResponse,
@@ -34,15 +34,24 @@ def _now_epoch() -> int:
     return int(time.time())
 
 
-def _map_messages(req: ChatCompletionRequest) -> list[dict[str, str]]:
-    # Normalize to role/content dicts for the client
-    return [{"role": m.role, "content": m.content} for m in req.messages]
+def _map_messages(req: ChatCompletionRequest) -> list[dict[str, Any]]:
+    # Normalize to role/content dicts for the client, preserving union content.
+    out: list[dict[str, Any]] = []
+    for m in req.messages:
+        item: dict[str, Any] = {"role": m.role}
+        # Preserve content as sent; cast for type checker due to union
+        item["content"] = m.content
+        if getattr(m, "tool_call_id", None):
+            item["tool_call_id"] = m.tool_call_id
+        out.append(item)
+    # Explicit return type hint for mypy to treat contents as Any-typed dicts
+    return out
 
 
 def _map_finish_reason(reason: Any) -> FinishReasonEnum:
     # Map upstream reason into our strict enum; default to "stop"
     if isinstance(reason, str) and reason in ("stop", "length", "content_filter", "tool_calls"):
-        return reason  # type: ignore[return-value]
+        return cast(FinishReasonEnum, reason)
     return "stop"
 
 

@@ -12,8 +12,19 @@ from .errors import AppError, AuthError, InternalError
 def _json_response(
     payload: dict[str, Any], status_code: int, headers: dict[str, str] | None = None
 ) -> JSONResponse:
-    """Return a JSONResponse with standardized payload and optional headers."""
-    return JSONResponse(content=payload, status_code=status_code, headers=headers or {})
+    """Return a JSONResponse with standardized payload and optional headers.
+
+    Adds x-request-id header if available from correlation middleware to align with OpenAI SDK.
+    """
+    from ai_gateway.middleware.correlation import get_request_id
+
+    hdrs = dict(headers or {})
+    req_id = get_request_id()
+    if req_id and "x-request-id" not in {k.lower(): v for k, v in hdrs.items()}:
+        # ensure both casings present for maximum interoperability
+        hdrs.setdefault("X-Request-ID", req_id)
+        hdrs.setdefault("x-request-id", req_id)
+    return JSONResponse(content=payload, status_code=status_code, headers=hdrs)
 
 
 def register_exception_handlers(app: FastAPI) -> None:
@@ -27,10 +38,10 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(AppError)
     async def handle_app_error(request: Request, exc: AppError) -> JSONResponse:  # noqa: ARG001
-        headers: dict[str, str] | None = None
+        headers: dict[str, str] = {}
         if isinstance(exc, AuthError):
             # Enforce Bearer auth header per RFC6750
-            headers = {"WWW-Authenticate": "Bearer"}
+            headers["WWW-Authenticate"] = "Bearer"
         return _json_response(exc.to_payload(), status_code=exc.status_code, headers=headers)
 
     @app.exception_handler(StarletteHTTPException)
