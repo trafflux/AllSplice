@@ -59,9 +59,9 @@ def test_middleware_order(app: FastAPI) -> None:
     # Starlette applies middleware in reverse installation order (last installed executes first).
     # To have Correlation execute before SecurityHeaders, Correlation must be installed AFTER SecurityHeaders.
     # Therefore, corr_index must be greater than sec_index.
-    assert (
-        corr_index > sec_index
-    ), "Middleware install order must be SecurityHeadersMiddleware then CorrelationIdMiddleware"
+    assert corr_index > sec_index, (
+        "Middleware install order must be SecurityHeadersMiddleware then CorrelationIdMiddleware"
+    )
 
 
 def test_app_factory_does_not_construct_settings(monkeypatch: pytest.MonkeyPatch) -> None:
