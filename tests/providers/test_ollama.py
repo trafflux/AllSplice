@@ -15,33 +15,51 @@ from ai_gateway.schemas.openai_chat import (
     ChatMessage,
     Choice,
 )
+from ai_gateway.schemas.openai_embeddings import CreateEmbeddingsRequest
+from ai_gateway.schemas.openai_models import Model
 
 
-class DummySettings:
-    def __init__(self) -> None:
-        self.OLLAMA_HOST = "http://localhost:11434"
-        self.REQUEST_TIMEOUT_S = 1.0
-        self.MODEL_DEFAULT = "llama3.1:latest"
+@pytest.fixture(autouse=True)
+def _patch_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ensure OllamaClient initialization sees relaxed settings in tests."""
+    from ai_gateway.config.config import Settings, get_settings
 
-
-@pytest.fixture()
-def settings() -> DummySettings:
-    return DummySettings()
-
-
-@pytest.fixture()
-def provider(monkeypatch: pytest.MonkeyPatch, settings: DummySettings) -> ChatProvider:
-    # Build provider with injected DummySettings via monkeypatch if provider pulls get_settings at runtime.
-    from ai_gateway.config import config as config_module
-
-    def _get_settings() -> DummySettings:
-        return settings
-
-    # Ensure provider uses our settings
-    if hasattr(config_module.get_settings, "cache_clear"):
+    # Clear any cached get_settings results so our patch takes effect immediately
+    if hasattr(get_settings, "cache_clear"):
         with contextlib.suppress(Exception):
-            config_module.get_settings.cache_clear()
-    monkeypatch.setattr(config_module, "get_settings", _get_settings)
+            get_settings.cache_clear()
+
+    def fake_settings() -> Settings:
+        # provide minimal, valid config for unit tests
+        return Settings(
+            ALLOWED_API_KEYS=["test-key"],
+            ALLOWED_API_KEYS_RAW="test-key",
+            DEVELOPMENT_MODE=True,
+            REQUIRE_AUTH=True,
+            OLLAMA_HOST="http://localhost:11434",
+            REQUEST_TIMEOUT_S=1,
+        )
+
+    monkeypatch.setattr("ai_gateway.config.config.get_settings", fake_settings, raising=True)
+
+
+@pytest.fixture()
+def provider(monkeypatch: pytest.MonkeyPatch) -> ChatProvider:
+    # Ensure OllamaClient constructed inside provider sees relaxed settings
+    from ai_gateway.config.config import Settings
+
+    def fake_settings() -> Settings:
+        return Settings(
+            ALLOWED_API_KEYS=["test-key"],
+            ALLOWED_API_KEYS_RAW="test-key",
+            DEVELOPMENT_MODE=True,
+            REQUIRE_AUTH=True,
+            OLLAMA_HOST="http://localhost:11434",
+            REQUEST_TIMEOUT_S=1,
+        )
+
+    # Patch before provider initialization so OllamaClient() uses it
+    monkeypatch.setattr("ai_gateway.config.config.get_settings", fake_settings, raising=True)
 
     return OllamaProvider()
 
@@ -131,3 +149,61 @@ def test_timeout_maps_to_provider_error(
     from ai_gateway.exceptions.errors import ProviderError
 
     assert isinstance(ei.value, asyncio.TimeoutError | ProviderError)
+
+
+@pytest.mark.asyncio
+async def test_ollama_provider_list_models_stub(provider: ChatProvider) -> None:
+    """Test list_models method returns a valid response (stub implementation)."""
+    # Cast to OllamaProvider to access list_models method
+    ollama_provider = provider  # Already OllamaProvider from fixture
+
+    response = await ollama_provider.list_models()
+
+    # Check response structure
+    assert response.object == "list"
+    assert isinstance(response.data, list)
+    # The stub implementation should return at least one model
+    assert len(response.data) > 0
+
+    # Check each model
+    for model in response.data:
+        assert isinstance(model, Model)
+        assert model.object == "model"
+        assert isinstance(model.id, str) and len(model.id) > 0
+        assert isinstance(model.created, int)
+        assert isinstance(model.owned_by, str) and len(model.owned_by) > 0
+        assert isinstance(model.permission, list) and len(model.permission) > 0
+
+
+@pytest.mark.asyncio
+async def test_ollama_provider_create_embeddings_stub(provider: ChatProvider) -> None:
+    """Test create_embeddings method returns a valid response (stub implementation)."""
+    # Cast to OllamaProvider to access create_embeddings method
+    ollama_provider = provider  # Already OllamaProvider from fixture
+
+    # Test with string input
+    req = CreateEmbeddingsRequest(
+        model="llama3.1:latest",
+        input="Hello world",
+    )
+    resp = await ollama_provider.create_embeddings(req)
+
+    assert resp.object == "list"
+    assert isinstance(resp.data, list)
+    assert len(resp.data) == 1
+    assert resp.model == "llama3.1:latest"
+
+    # Check embedding item
+    item = resp.data[0]
+    assert item.object == "embedding"
+    assert isinstance(item.embedding, list)
+    assert len(item.embedding) > 0
+    assert item.index == 0
+
+    # Check all embedding values are floats
+    for val in item.embedding:
+        assert isinstance(val, float)
+
+    # Check usage
+    assert resp.usage.prompt_tokens >= 0
+    assert resp.usage.total_tokens >= 0
