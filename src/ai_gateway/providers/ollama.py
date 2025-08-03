@@ -163,7 +163,11 @@ class OllamaProvider(ChatProvider):
                 format_hint=format_hint,
                 stream=False,
             )
+            # Defensive: http client may bubble httpx.HTTPStatusError or return non-dict JSON.
+            if not isinstance(raw, dict):
+                raise ProviderError("Upstream provider error")
         except Exception as exc:
+            # Normalize any client/upstream failure into ProviderError (handled as 502)
             raise ProviderError("Upstream provider error") from exc
 
         return self._map_response_to_openai(raw, req.model)

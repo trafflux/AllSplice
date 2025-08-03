@@ -9,8 +9,10 @@ src/ai_gateway/config/config.py
 src/ai_gateway/config/constants.py
 src/ai_gateway/exceptions/errors.py
 src/ai_gateway/exceptions/handlers.py
+src/ai_gateway/logging/setup.py
 src/ai_gateway/middleware/auth.py
 src/ai_gateway/middleware/correlation.py
+src/ai_gateway/middleware/logging_middleware.py
 src/ai_gateway/middleware/security_headers.py
 src/ai_gateway/providers/base.py
 src/ai_gateway/providers/cerebras.py
@@ -18,8 +20,10 @@ src/ai_gateway/providers/cerebras_client.py
 src/ai_gateway/providers/custom.py
 src/ai_gateway/providers/ollama.py
 src/ai_gateway/providers/ollama_client.py
-src/ai_gateway/schemas/ __init__.py
+src/ai_gateway/schemas/__init__.py
 src/ai_gateway/schemas/openai_chat.py
+src/ai_gateway/schemas/openai_embeddings.py
+src/ai_gateway/schemas/openai_models.py
 src/allsplice.egg-info/PKG-INFO
 src/allsplice.egg-info/SOURCES.txt
 src/allsplice.egg-info/dependency_links.txt

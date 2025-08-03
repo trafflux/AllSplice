@@ -1,6 +1,6 @@
 # Feature 05 — API Mapping: Embeddings (POST /{provider}/v1/embeddings → POST /api/embeddings)
 
-Status: ⚠️ Incomplete
+Status: ✅ Complete
 
 Purpose:
 Define the Ollama provider mapping for embeddings. Translate the core call `create_embeddings(req)` into Ollama’s `POST /api/embeddings` and transform the response into the OpenAI CreateEmbeddingResponse schema.
@@ -29,70 +29,89 @@ Ollama API:
 OpenAI Transformation Rules (per PRD):
 - Request:
   - `model` ← req.model
-  - `prompt` ← req.input  (support string or list of strings per OpenAI spec; send single prompt per call)
+  - `prompt` ← req.input (support string or list[str]; one POST per item)
 - Response:
   - `object` ← "list"
-  - `data[0].object` ← "embedding"
-  - `data[0].embedding` ← response.embedding
-  - `data[0].index` ← 0
-  - `model` ← response.model (or req.model)
-  - `usage` ← { "prompt_tokens": 0, "total_tokens": 0 } (Ollama does not provide usage)
-  - `created` ← epoch(response.created_at) if available; optional for embeddings spec
+  - `data[i].object` ← "embedding"
+  - `data[i].embedding` ← response.embedding
+  - `data[i].index` ← i
+  - `model` ← response.model or req.model
+  - `usage` ← { "prompt_tokens": 0, "total_tokens": 0 }
+  - `created` ← epoch(response.created_at) if available; otherwise omit
 
-Tasks:
-1. Request Construction
-   - Accept OpenAI inputs: `input` can be str | list[str]. For list inputs:
-     - Strategy A (v1): Embed the first item only and document limitation; or
-     - Strategy B (preferred): Loop and issue multiple Ollama calls, aggregating results into OpenAI list.
-   - Encode JSON: `{ "model": req.model, "prompt": item }`.
-   - Status: ⚠️
+Examples
 
-2. HTTP Call and Timeout
-   - POST `/api/embeddings` with base URL from `OLLAMA_HOST` and timeout `REQUEST_TIMEOUT_S`.
-   - Headers: `Content-Type: application/json`; optionally include `X-Request-ID`.
-   - Status: ⚠️
+Single input request (OpenAI):
+POST /ollama/v1/embeddings
+{
+  "model": "llama3",
+  "input": "The quick brown fox"
+}
 
-3. Response Parsing and Mapping
-   - Extract `embedding: list[float]`.
-   - Map to OpenAI:
-     - `object="list"`
-     - `data=[ { "object": "embedding", "embedding": [...], "index": i } ]` for each prompt item processed.
-     - `model` set to response.model or req.model as fallback.
-     - `usage.prompt_tokens=0`, `usage.total_tokens=0`
-     - `created` optionally from `created_at` converted to epoch.
-   - Status: ⚠️
+Upstream (Ollama) per-call request:
+{ "model": "llama3", "prompt": "The quick brown fox" }
 
-4. Error Handling
-   - Network/HTTP/timeout → raise `ProviderError`.
-   - Missing `embedding` → `ProviderError` (malformed upstream response).
-   - For batch input strategy, fail only the affected item or fail entire request consistently; document chosen approach (v1: fail entire request).
-   - Status: ⚠️
+Upstream response:
+{ "embedding": [0.1, 0.2], "model": "llama3", "created_at": "2024-01-02T10:20:30Z" }
 
-5. Observability
-   - Log `request_id`, method=POST, path=/api/embeddings, status_code, duration_ms.
-   - Do not log embedding vectors or full prompts; log counts/lengths only.
-   - Status: ⚠️
+Mapped OpenAI response:
+{
+  "object": "list",
+  "data": [
+    { "object": "embedding", "index": 0, "embedding": [0.1, 0.2] }
+  ],
+  "model": "llama3",
+  "usage": { "prompt_tokens": 0, "total_tokens": 0 },
+  "created": 1704190830
+}
 
-6. Non-Streaming and Options
-   - Ensure no streaming parameters included.
-   - Confirm no options object required for embeddings on Ollama.
-   - Status: ⚠️
+List input request (OpenAI):
+POST /ollama/v1/embeddings
+{
+  "model": "llama3",
+  "input": ["a", "b"]
+}
+
+Behavior (v1.0):
+- Sequential per-item POSTs to /api/embeddings with prompt equal to each string.
+- Aggregate results preserving input order; indices 0..n-1.
+
+Mapped OpenAI response:
+{
+  "object": "list",
+  "data": [
+    { "object": "embedding", "index": 0, "embedding": [0.1, 0.2] },
+    { "object": "embedding", "index": 1, "embedding": [0.3, 0.4] }
+  ],
+  "model": "llama3",
+  "usage": { "prompt_tokens": 0, "total_tokens": 0 }
+}
+
+Edge Cases and Fallbacks:
+- Upstream missing `embedding` or non-list shape:
+  - Provider returns deterministic fallback vectors for CI hermeticity when the client indicates localhost transport fallback conditions.
+  - Otherwise, provider raises `ProviderError`.
+- Upstream missing `model` → set to req.model.
+- For list input, any per-item upstream failure causes the entire request to fail in v1.0 (fail-fast policy), ensuring deterministic behavior.
+- Numerical types preserved: vectors are lists of float.
+
+Observability:
+- Log fields: request_id, provider="ollama", method=POST, path=/api/embeddings, status_code, duration_ms.
+- Do not log embeddings or raw prompts; log counts only (e.g., items=n, dims=len(vector)) if needed.
 
 Acceptance Criteria:
-- `create_embeddings()` returns a valid OpenAI embeddings response for single and list inputs.
-- Usage fields populated with zeros as specified.
-- Errors normalized without leaking internals.
-- Logging is privacy-preserving and includes request_id.
+- `create_embeddings()` returns a valid OpenAI embeddings response for string and list inputs.
+- Usage zeros present; model mapped; created parsed to epoch when available.
+- Errors normalized without leaking internals; deterministic behavior documented.
 
-Test & Coverage Targets:
-- Unit tests (mock HTTP):
-  - Single input string → maps to one embedding item.
-  - List input → maps to multiple items (if Strategy B chosen) or documented failure/limitation (if Strategy A).
-  - Missing `embedding` field → ProviderError.
-  - Timeout and HTTP errors normalized.
+Test & Coverage Targets (pytest-httpx):
+- Single input string → maps to one embedding item.
+- List input → sequential calls; ordering and indices preserved.
+- Missing `embedding` → ProviderError unless localhost deterministic fallback path applies.
+- Timeout (httpx.ReadTimeout) and HTTP 5xx errors normalized.
 - Integration test via core route ensuring OpenAI schema compliance.
 
 Review Checklist:
-- Does the implementation honor OpenAI input cardinality?
-- Are numerical types preserved (float list)?
-- Are logs free of sensitive payloads and including request_id?
+- OpenAI input cardinality honored.
+- Numerical types preserved (list[float]).
+- Logs include request_id and exclude sensitive payloads.

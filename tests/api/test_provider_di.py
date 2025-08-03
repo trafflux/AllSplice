@@ -73,6 +73,7 @@ def app() -> FastAPI:
 
     os.environ["DEVELOPMENT_MODE"] = "true"
     os.environ["REQUIRE_AUTH"] = "true"
+    os.environ["ALLOWED_API_KEYS"] = "test-key"  # <-- Ensure test-key is accepted
     return get_app()
 
 

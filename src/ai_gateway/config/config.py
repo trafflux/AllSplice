@@ -206,6 +206,8 @@ class Settings(BaseSettings):
     # Auth and security
     ALLOWED_API_KEYS: list[str] = Field(default_factory=list)
     ENABLE_SECURITY_HEADERS: bool = Field(default=True)
+    # Single toggle for opt-in enrichment hints; default False keeps router-first behavior unchanged
+    ENABLE_ENRICHMENT: bool = Field(default=False)
 
     # CORS
     ENABLE_CORS: bool = Field(default=False)

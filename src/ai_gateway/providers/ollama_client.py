@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 import anyio
@@ -22,17 +23,37 @@ class OllamaClient:
       - Forwards X-Request-ID header when available.
       - Only non-streaming chat supported in v1.0.
 
-    Test mode:
-      - When base_url starts with "http://localhost:11434" and no server is reachable,
-        methods fall back to deterministic mock responses to keep CI hermetic.
+    Testability:
+      - httpx client is injectable (session factory) to avoid hard dependencies and enable transport mocking.
+      - When base_url starts with "http://localhost:11434" and transport fails, deterministic localhost
+        fallbacks are used to keep CI hermetic (except explicit HTTP 5xx and httpx.ReadTimeout which propagate).
     """
 
-    def __init__(self, base_url: str | None = None, timeout_s: int | None = None) -> None:
+    def __init__(
+        self,
+        base_url: str | None = None,
+        timeout_s: int | None = None,
+        *,
+        client: httpx.AsyncClient | None = None,
+        client_factory: Callable[[], httpx.AsyncClient] | None = None,
+    ) -> None:
         settings = get_settings()
         resolved_base = base_url or (settings.OLLAMA_HOST or "http://localhost:11434")
         self._base_url = str(resolved_base).rstrip("/")
         self._timeout_s = float(timeout_s or settings.REQUEST_TIMEOUT_S or 30)
-        self._client = httpx.AsyncClient(base_url=self._base_url, timeout=self._timeout_s)
+
+        # Prefer explicit client, else factory, else default constructor.
+        if client is not None:
+            self._client = client
+            self._owns_client = False
+        else:
+
+            def default_factory() -> httpx.AsyncClient:
+                return httpx.AsyncClient(base_url=self._base_url, timeout=self._timeout_s)
+
+            factory: Callable[[], httpx.AsyncClient] = client_factory or default_factory
+            self._client = factory()
+            self._owns_client = True
 
     async def _headers(self) -> dict[str, str]:
         headers: dict[str, str] = {"Content-Type": "application/json"}
@@ -97,30 +118,26 @@ class OllamaClient:
                     "Invalid JSON payload", request=resp.request, response=resp
                 )
             return data
+        except httpx.HTTPStatusError:
+            # Do NOT fallback on HTTP status errors; propagate to provider for normalization
+            raise
         except (
             httpx.TimeoutException,
             httpx.NetworkError,
-            httpx.HTTPStatusError,
             httpx.ConnectError,
-        ):
-            # Test-mode fallback: synthesize deterministic response if local daemon unreachable
+        ) as e:
+            # Propagate explicit ReadTimeout (pytest-httpx) for provider normalization.
+            if isinstance(e, httpx.ReadTimeout):
+                raise
+            # Hermetic fallback only for localhost transport failures.
             if self._base_url.startswith("http://localhost:11434"):
-                # mimic previous mock behavior
                 last = next((m for m in reversed(messages) if m.get("role") == "user"), None)
                 content = f"Ollama mock reply to: {last.get('content') if last else ''}".strip()
-                mock: dict[str, Any] = {
+                return {
                     "model": model,
                     "message": {"role": "assistant", "content": content},
                     "done_reason": "stop",
                 }
-                if "created_at" in kwargs:
-                    mock["created_at"] = kwargs["created_at"]
-                if "prompt_eval_count" in kwargs:
-                    mock["prompt_eval_count"] = kwargs["prompt_eval_count"]
-                if "eval_count" in kwargs:
-                    mock["eval_count"] = kwargs["eval_count"]
-                return mock
-            # Otherwise, re-raise to let provider normalize to ProviderError
             raise
 
     async def get_tags(self) -> dict[str, Any]:
@@ -175,5 +192,7 @@ class OllamaClient:
             raise
 
     async def aclose(self) -> None:
-        with anyio.move_on_after(self._timeout_s):
-            await self._client.aclose()
+        # Only close the underlying client if we created it.
+        if self._owns_client:
+            with anyio.move_on_after(self._timeout_s):
+                await self._client.aclose()

@@ -1,6 +1,6 @@
 # Feature 04 — API Mapping: List Models (GET /{provider}/v1/models → GET /api/tags)
 
-Status: ⚠️ Incomplete
+Status: ✅ Complete
 
 Purpose:
 Define the Ollama provider’s mapping for the core List Models method. Translate the core call `list_models()` into Ollama’s `GET /api/tags` and transform the response into the OpenAI ListModels schema.
@@ -17,60 +17,69 @@ Ollama API:
 - Response (representative):
   {
     "models": [
-      { "name": "llama3:latest", "modified_at": "2024-01-02T10:20:30Z", ... },
-      ...
+      { "name": "llama3:latest", "modified_at": "2024-01-02T10:20:30Z" },
+      { "name": "mistral:7b", "modified_at": "2023-12-15T08:00:00Z" }
     ]
   }
 
 OpenAI Transformation Rules (per PRD):
 - data.[].id ← models.[].name
-- data.[].created ← Convert models.[].modified_at (ISO 8601) to Unix epoch seconds
+- data.[].created ← Convert models.[].modified_at (ISO 8601) to Unix epoch seconds; fallback to current epoch on parse failure
 - data.[].object ← "model"
 - data.[].owned_by ← "ollama"
 - top-level `object` ← "list"
 
-Tasks:
-1. HTTP Call and Timeout
-   - Perform GET `/api/tags` with base URL from `OLLAMA_HOST` and timeout from `REQUEST_TIMEOUT_S`.
-   - Include `X-Request-ID` header if supported.
-   - Status: ⚠️
+Examples
 
-2. Response Parsing
-   - Validate presence of `models` array; handle empty arrays gracefully.
-   - Status: ⚠️
+Request:
+GET /ollama/v1/models
+Headers:
+  Authorization: Bearer <API_KEY>
+  X-Request-ID: 123e4567
 
-3. Field Mapping
-   - For each `models[i]`, map:
-     - `id = name`
-     - `created = epoch(modified_at)`; if missing/unparseable, use 0 and log warning (do not fail provider).
-     - `object = "model"`
-     - `owned_by = "ollama"`
-   - Top-level `object = "list"`, `data = [...]`.
-   - Status: ⚠️
+Upstream (Ollama) response:
+{
+  "models": [
+    { "name": "llama3:latest", "modified_at": "2024-01-02T10:20:30Z" }
+  ]
+}
 
-4. Error Handling
-   - Network/HTTP/timeout → raise normalized `ProviderError` with minimal message (no internals).
-   - Malformed body (no models) → return empty list with `object="list"` and log warning.
-   - Status: ⚠️
+Mapped OpenAI response:
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "llama3:latest",
+      "object": "model",
+      "created": 1704190830,
+      "owned_by": "ollama"
+    }
+  ]
+}
 
-5. Observability
-   - Log `request_id`, method=GET, path=/api/tags, status_code, duration_ms.
-   - Status: ⚠️
+Edge Cases and Fallbacks:
+- Empty or missing models array → return `{ "object": "list", "data": [] }` and log a warning.
+- Invalid or missing modified_at → created set to current epoch; log a warning.
+- Non-dict or malformed upstream JSON → provider normalizes to `ProviderError`.
+
+Observability:
+- Log fields: request_id, provider="ollama", method=GET, path=/api/tags, status_code, duration_ms.
+- No model payload secrets are logged.
 
 Acceptance Criteria:
-- `list_models()` returns an OpenAI ListModels-compatible response with fields populated as specified.
-- On errors, core can convert exceptions to HTTP 502 via `ProviderError`.
-- Empty/missing models handled deterministically (empty `data` with `object="list"`).
+- `list_models()` returns an OpenAI ListModels-compatible response as specified.
+- Errors are normalized to `ProviderError` and surfaced as HTTP 502 by core.
+- Empty/missing models handled deterministically.
 
 Test & Coverage Targets:
-- Unit tests (mock HTTP):
-  - Success mapping with 1+ models.
+- Unit tests (pytest-httpx):
+  - Success mapping with one or more models.
   - Empty models array → empty OpenAI list.
-  - ISO 8601 parsing into epoch (valid and invalid cases).
-  - Timeout and HTTP error normalization.
-- Integration test via core route using this provider mock to assert schema shape.
+  - Timestamp parse success and failure paths (fallback to now).
+  - Timeout (httpx.ReadTimeout) and HTTP 5xx error normalization.
+- Integration test via core route asserting schema shape and `WWW-Authenticate`/401/422/502 codes.
 
 Review Checklist:
-- Are mandatory fields present and typed correctly?
-- Is created timestamp correctly converted and robust to parse failures?
-- Do errors avoid leaking provider internals?
+- Mandatory fields present and typed correctly.
+- Created timestamp conversion robust to parse failures.
+- No leakage of provider internals in errors.

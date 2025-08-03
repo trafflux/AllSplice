@@ -18,3 +18,5 @@ ruff
 mypy
 pre-commit
 types-requests
+pytest-httpx
+trio==0.25.0
